@@ -11,19 +11,25 @@ jobs:
         with: { node-version: 22, cache: npm }
       - run: npm ci
       - run: cp .env.example .env
-      - name: Start integration dependencies
+      - name: Start integration containers
         run: |
           docker network create task-tracking-ci
           docker run -d --name task-ci-mongo --network task-tracking-ci -p 27017:27017 mongo:8 mongod --replSet rs0 --bind_ip_all
           docker run -d --name task-ci-redis --network task-tracking-ci -p 6379:6379 redis:8-alpine
           docker run -d --name task-ci-minio --network task-tracking-ci -p 9000:9000 -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin minio/minio:latest server /data
           docker run -d --name task-ci-mailpit --network task-tracking-ci -p 1025:1025 -p 8025:8025 axllent/mailpit:latest
+      - name: Initialize MongoDB replica set
+        run: |
           for attempt in {1..30}; do docker exec task-ci-mongo mongosh --quiet --eval "db.adminCommand('ping').ok" && break; sleep 2; done
           docker exec task-ci-mongo mongosh --quiet --eval "rs.initiate({_id:'rs0',members:[{_id:0,host:'localhost:27017'}]})"
           for attempt in {1..30}; do docker exec task-ci-mongo mongosh --quiet --eval "if (!db.hello().isWritablePrimary) quit(1)" && break; sleep 2; done
+      - name: Initialize MinIO bucket
+        run: |
           for attempt in {1..30}; do curl --fail --silent http://localhost:9000/minio/health/live && break; sleep 2; done
           docker exec task-ci-minio mc alias set local http://localhost:9000 minioadmin minioadmin
           docker exec task-ci-minio mc mb --ignore-existing local/task-attachments
+      - name: Wait for Mailpit
+        run: |
           for attempt in {1..30}; do curl --fail --silent http://localhost:8025/api/v1/info && break; sleep 2; done
       - run: npm run check
       - run: npm run build
