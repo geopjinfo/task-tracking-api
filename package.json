@@ -11,6 +11,7 @@
     "migrate:down": "node --env-file-if-exists=.env dist/migrate.js down",
     "migrate:status": "node --env-file-if-exists=.env dist/migrate.js status",
     "migrate:dev": "node --env-file-if-exists=.env --import tsx src/migrate.ts up",
+    "seed:dev": "node --env-file-if-exists=.env --import tsx src/seed.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src tests",
     "lint:openapi": "redocly lint docs/openapi.yaml",
@@ -18,6 +19,7 @@
     "test:coverage": "vitest run --coverage",
     "load:smoke": "node scripts/load-smoke.mjs",
     "proxy:smoke": "node scripts/caddy-sse-smoke.mjs",
+    "restore:smoke": "node scripts/restore-smoke.mjs",
     "check": "npm run typecheck && npm run lint && npm run lint:openapi && npm test"
   },
   "engines": {

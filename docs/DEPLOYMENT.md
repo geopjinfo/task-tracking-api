@@ -45,6 +45,8 @@ After readiness, verify routing, security headers, the SSE connection, and recon
 
 Back up MongoDB with a replica-set-consistent snapshot or `mongodump` using deployment-managed credentials. Back up the private object bucket with versioning or provider snapshots. Redis does not require recovery for correctness. Restore into an isolated environment first, check indexes and referential counts, then exercise the end-to-end smoke suite before promoting the restored data.
 
+Run `npm run restore:smoke` against the Compose stack to create an isolated MongoDB record and MinIO object, back them up, remove the originals, restore them, verify both, and clean up. Record the command, date, and result for each release candidate. This smoke validates mechanics; production retention, encryption, and off-site storage remain deployment-provider responsibilities.
+
 ## Rollback
 
 Applied versions, checksums, timestamps, and durations are recorded in `schema_migrations`; `schema_migration_lock` provides a renewable-scope execution lease. Migration `001 initial-schema` is additive and idempotent. CI applies it against a fresh replica set and verifies status before tests. To roll back application code, stop new worker claims, route traffic to the previous immutable image, start its compatible worker, and verify readiness plus core flows. Use `npm run migrate:down` only as a deliberate schema rollback after backup and compatibility review. If a future release introduces destructive change, it must ship a separately tested batched backfill, forward-fix, and restore plan before deployment.

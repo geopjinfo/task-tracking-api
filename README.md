@@ -89,10 +89,12 @@ npm run check
 npm run build
 npm run test:coverage
 npm run load:smoke
+npm run seed:dev
+npm run restore:smoke
 docker compose run --rm api npm run migrate
 ```
 
-Migrations run automatically before the API or worker becomes ready. `docker compose run --rm api npm run migrate` applies pending migrations, while `npm run migrate:status` reports applied and pending versions and `npm run migrate:down` reverts only the most recent migration. The runner verifies checksums and holds a database lease so concurrent instances cannot apply schema changes together. Seed data is deliberately separate from migrations; this release does not require seed data. `npm run check` runs strict type checking, type-aware linting, OpenAPI validation, and all automated tests. The load smoke requires the local stack and records latency plus the winning MongoDB index; see [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md).
+Migrations run automatically before the API or worker becomes ready. `docker compose run --rm api npm run migrate` applies pending migrations, while `npm run migrate:status` reports applied and pending versions and `npm run migrate:down` reverts only the most recent migration. The runner verifies checksums and holds a database lease so concurrent instances cannot apply schema changes together. `npm run seed:dev` creates one idempotent synthetic account and refuses production execution. `npm run restore:smoke` proves isolated MongoDB and MinIO backup/restore using temporary records that it removes afterward. `npm run check` runs strict type checking, type-aware linting, OpenAPI validation, and all automated tests. The load smoke requires the local stack and records latency plus the winning MongoDB index; see [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md).
 
 ## API
 
