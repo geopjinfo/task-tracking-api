@@ -1,18 +1,18 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type { NextFunction, Request, Response } from 'express';
-import { v7 as uuidv7 } from 'uuid';
 import { ZodError } from 'zod';
+import { AppError } from './shared/errors/app-error.js';
+import { newId } from './shared/ids.js';
+export { AppError } from './shared/errors/app-error.js';
+export { newId } from './shared/ids.js';
 
 export type RequestContext = { requestId: string; userId?: string; projectId?: string };
 export const requestContext = new AsyncLocalStorage<RequestContext>();
 export const contextMiddleware = (req: Request, res: Response, next: NextFunction): void => {
-  const requestId = req.header('x-request-id')?.slice(0, 100) || uuidv7();
+  const requestId = req.header('x-request-id')?.slice(0, 100) || newId();
   res.setHeader('x-request-id', requestId);
   requestContext.run({ requestId }, next);
 };
-export class AppError extends Error {
-  constructor(public readonly status: number, public readonly code: string, message: string, public readonly details?: unknown) { super(message); }
-}
 export const asyncRoute = (fn: (req: Request, res: Response) => Promise<void>) =>
   (req: Request, res: Response, next: NextFunction): void => { void fn(req, res).catch(next); };
 export const errorHandler = (error: unknown, _req: Request, res: Response, _next: NextFunction): void => {
@@ -22,4 +22,3 @@ export const errorHandler = (error: unknown, _req: Request, res: Response, _next
   res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'An unexpected error occurred', requestId } });
 };
 export const notFound = (_req: Request, res: Response): void => { res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Route not found', requestId: requestContext.getStore()?.requestId } }); };
-export const newId = (): string => uuidv7();

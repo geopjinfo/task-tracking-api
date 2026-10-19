@@ -1,0 +1,9 @@
+import type { Collection, Filter } from 'mongodb'; import type { TaskRepository,TaskQuery,TaskPage } from '../../application/ports/task.repository.js'; import type { Task } from '../../domain/task.entity.js'; import type { TaskDocument } from './task.document.js'; import { TaskMapper } from './task.mapper.js';
+export class MongoTaskRepository implements TaskRepository{
+ constructor(private readonly collection:Collection<TaskDocument>){}
+ async insert(task:Task):Promise<void>{await this.collection.insertOne(TaskMapper.toDocument(task));}
+ async findById(id:string):Promise<Task|null>{const found=await this.collection.findOne({id});return found?TaskMapper.toDomain(found):null;}
+ async search(query:TaskQuery):Promise<TaskPage>{const filter:Filter<TaskDocument>={...(query.projectId?{projectId:query.projectId}:{}),...(query.assigneeId?{assigneeId:query.assigneeId}:{}),...(query.status?{status:query.status}:{}),...(query.cursor?{id:{$lt:query.cursor}}:{})};if(query.search)filter.$text={$search:query.search};const documents=await this.collection.find(filter).sort({[query.sort]:query.order==='asc'?1:-1,id:-1}).limit(query.limit+1).toArray(),hasMore=documents.length>query.limit,visible=documents.slice(0,query.limit),items=visible.map(document=>TaskMapper.toDomain(document)),last=visible.at(-1);return hasMore&&last?{items,nextCursor:last.id}:{items};}
+ async update(task:Task,expectedVersion:number):Promise<boolean>{const document=TaskMapper.toDocument(task),id=document.id,fields:Partial<TaskDocument>={...document};delete fields.id;delete fields.version;const result=await this.collection.updateOne({id,version:expectedVersion},{$set:fields,$inc:{version:1}});return result.modifiedCount===1;}
+ async delete(id:string):Promise<boolean>{return (await this.collection.deleteOne({id})).deletedCount===1;}
+}
