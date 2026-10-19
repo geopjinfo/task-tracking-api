@@ -1,0 +1,2 @@
+import pino,{type DestinationStream,type Logger} from 'pino';import type { Config } from '../../config/index.js';
+export const createLogger=(config:Config,destination?:DestinationStream):Logger=>pino({level:config.LOG_LEVEL,base:{service:'task-tracking-api',environment:config.NODE_ENV},redact:{paths:['req.headers.authorization','req.headers.cookie','password','passwordHash','token','tokenHash','refreshToken','OPENROUTER_API_KEY','S3_SECRET_KEY','uploadUrl','downloadUrl'],censor:'[REDACTED]'}},destination);

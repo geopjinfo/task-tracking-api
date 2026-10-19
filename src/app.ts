@@ -1,9 +1,10 @@
 import { createHash, randomBytes } from 'node:crypto';
 import cookieParser from 'cookie-parser'; import cors from 'cors'; import express, { type Request } from 'express';
 import nodemailer from 'nodemailer'; import pino from 'pino'; import { pinoHttp } from 'pino-http'; import { z } from 'zod';
+import type { Logger } from 'pino';
 import { S3Client, PutObjectCommand, GetObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3'; import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 type RedisSubscriber={connect():Promise<unknown>;subscribe(channel:string,listener:(message:string)=>void):Promise<unknown>;unsubscribe(channel:string):Promise<unknown>;quit():Promise<unknown>};
-type RedisRuntime={incr(key:string):Promise<number>;expire(key:string,seconds:number):Promise<number>;duplicate():RedisSubscriber};
+type RedisRuntime={incr(key:string):Promise<number>;expire(key:string,seconds:number):Promise<number>;ping():Promise<string>;duplicate():RedisSubscriber};
 import type { Config } from './config.js'; import type { Database } from './database.js'; import { AuthService, authMiddleware, type UserDoc } from './auth.js';
 import { AppError, asyncRoute, contextMiddleware, errorHandler, newId, notFound } from './shared.js'; import { requireRole, type MembershipDoc, type Role } from './policies.js';
 import { enqueue } from './outbox.js';
@@ -20,12 +21,12 @@ const page=(raw:unknown)=>z.object({limit:z.coerce.number().int().min(1).max(100
 const userId=(req:Request):string=>{if(!req.auth)throw new AppError(401,'AUTH_REQUIRED','Authentication is required');return req.auth.userId;};
 const publicUser=(u:UserDoc)=>({id:u.id,email:u.emailNormalized,displayName:u.displayName,createdAt:u.createdAt,updatedAt:u.updatedAt});
 
-export function createApp(db:Database,config:Config,redis:RedisRuntime){
+export function createApp(db:Database,config:Config,redis:RedisRuntime,injectedLogger?:Logger){
  const app=express(),auth=new AuthService(db,config),secure={httpOnly:true,secure:config.COOKIE_SECURE,sameSite:'lax' as const,path:'/api/v1/auth'};
- const logger=pino({level:config.LOG_LEVEL,redact:['req.headers.authorization','req.headers.cookie','password','token','refreshToken','OPENROUTER_API_KEY']});
+ const logger=injectedLogger??pino({level:config.LOG_LEVEL,redact:['req.headers.authorization','req.headers.cookie','password','token','refreshToken','OPENROUTER_API_KEY']});
  const mailer=nodemailer.createTransport({host:config.SMTP_HOST,port:config.SMTP_PORT,secure:false});
  const s3=new S3Client({endpoint:config.S3_ENDPOINT,region:config.S3_REGION,forcePathStyle:true,credentials:{accessKeyId:config.S3_ACCESS_KEY,secretAccessKey:config.S3_SECRET_KEY}});
- app.disable('x-powered-by'); app.use(contextMiddleware,pinoHttp({logger}),cors({origin:config.PUBLIC_URL,credentials:true}),express.json({limit:'1mb'}),cookieParser());
+ app.disable('x-powered-by');app.set('trust proxy',config.TRUST_PROXY);app.use(contextMiddleware,pinoHttp({logger}),cors({origin:config.PUBLIC_URL,credentials:true}),express.json({limit:'1mb'}),cookieParser());
  const api=express.Router(), protectedApi=express.Router(),taskModule=createTaskModule(db); protectedApi.use(authMiddleware(auth));
  api.use('/auth',async(req,res,next)=>{try{const key=`rate:auth:${req.ip??'unknown'}`,count=await redis.incr(key);if(count===1)await redis.expire(key,60);if(count>20){res.status(429).json({error:{code:'RATE_LIMITED',message:'Too many authentication requests'}});return;}next();}catch(error:unknown){req.log.error({err:error},'rate limiter unavailable');res.status(503).json({error:{code:'DEPENDENCY_UNAVAILABLE',message:'Authentication protection is temporarily unavailable'}});}});
  api.post('/auth/register',asyncRoute(async(req,res)=>{const body=credentials.extend({displayName:z.string().trim().min(2).max(80)}).parse(req.body);const result=await auth.register(body.email,body.displayName,body.password);res.cookie(cookieName,result.refreshToken,secure).status(201).json({user:result.user,accessToken:result.accessToken});}));
@@ -56,6 +57,6 @@ export function createApp(db:Database,config:Config,redis:RedisRuntime){
  protectedApi.patch('/notifications/read-all',asyncRoute(async(req,res)=>{await db.collection('notifications').updateMany({recipientId:userId(req),readAt:{$exists:false}},{$set:{readAt:new Date()}});res.status(204).end();}));
  protectedApi.get('/notifications/stream',asyncRoute(async(req,res)=>{const uid=userId(req),channel=`notifications:${uid}`,subscriber=redis.duplicate();await subscriber.connect();await subscriber.subscribe(channel,message=>{res.write(`event: notification\ndata: ${message}\n\n`);});res.status(200).set({'content-type':'text/event-stream','cache-control':'no-cache','connection':'keep-alive','x-accel-buffering':'no'});res.flushHeaders();res.write(`event: connected\ndata: ${JSON.stringify({userId:uid})}\n\n`);const heartbeat=setInterval(()=>res.write(': heartbeat\n\n'),15000);req.on('close',()=>{clearInterval(heartbeat);void subscriber.unsubscribe(channel).finally(()=>subscriber.quit());});}));
  api.use(protectedApi); app.use('/api/v1',api);
- app.get('/health/live',(_req,res)=>res.json({status:'ok'}));app.get('/health/ready',asyncRoute(async(_req,res)=>{await db.ping();res.json({status:'ready'});}));
+ app.get('/health/live',(_req,res)=>res.json({status:'ok'}));app.get('/health/ready',asyncRoute(async(_req,res)=>{await Promise.all([db.ping(),redis.ping()]);res.json({status:'ready'});}));
  app.use(notFound,errorHandler); return app;
 }
