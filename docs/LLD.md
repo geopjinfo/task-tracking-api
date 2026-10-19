@@ -212,7 +212,7 @@ The query schema bounds limit to 100 and validates status, assignee, search, sor
 
 ## Comment sequence
 
-The service loads the task, verifies current membership, creates the comment, calculates visible project recipients, and transactionally inserts comment plus `task.commented` event. Listing uses stable chronological order. Empty/oversized bodies return 422.
+The service loads the task, verifies current membership, and creates the comment. Listing uses a stable `(createdAt,id)` chronological cursor. Only the original author can edit or delete; deletion erases the body and retains a `[deleted]` tombstone so pagination and discussion chronology remain stable. Empty/oversized bodies return 422. Notification outbox integration is added at the notification phase so the final write path commits the comment and `task.commented` event atomically.
 
 ## Attachment sequences
 
@@ -227,7 +227,7 @@ client uploads directly
  → mark ready or stable dependency/validation error
 ```
 
-Confirmation is idempotent for an already-ready matching object. Download authorizes current project membership and ready state, sanitizes content-disposition filename, and returns a five-minute signed URL. Storage errors do not reveal bucket/key details.
+Confirmation is idempotent for an already-ready matching object. It compares actual object size and MIME type with the stored intent; mismatch fails the record and removes the object. Download authorizes current project membership and ready state, sanitizes content-disposition filename, and returns a five-minute signed URL. The uploader or a project owner/admin may delete; metadata is hidden before private-object removal. Stale pending intents are failed and their keys cleaned idempotently. Storage errors do not reveal bucket/key details.
 
 ## Typed events and outbox worker
 

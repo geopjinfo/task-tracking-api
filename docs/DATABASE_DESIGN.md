@@ -157,6 +157,8 @@ External HTTP, SMTP, Redis publication, and object-storage calls never occur ins
 
 - Project deletion is not exposed in the initial API; archival avoids an unsafe unbounded synchronous cascade.
 - Task deletion marks or removes task-owned comments and attachment metadata according to the service transaction/cleanup policy; private objects are deleted asynchronously and idempotently.
+- Comment deletion erases the body, sets `deletedAt`, and retains a stable tombstone in chronological lists. Only the original author may edit or delete a comment.
+- Attachment records retain expected size and MIME metadata. Confirmation marks them ready only after object metadata matches; mismatches and expired intents become failed. Deletion marks metadata deleted and removes the private object, with cleanup safe to retry.
 - Expired sessions may be TTL-deleted after synchronous expiry checks.
 - Processed outbox events and old read notifications use a documented operational retention period before maintenance deletion; no TTL is added until that period is selected for deployment.
 - Stale pending attachments are marked failed and their object keys removed if present.

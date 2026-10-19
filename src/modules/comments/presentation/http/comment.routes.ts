@@ -1,0 +1,2 @@
+import { Router } from 'express';import { asyncRoute } from '../../../../shared/http/async-route.js';import type { CommentController } from './comment.controller.js';
+export const commentRoutes=(controller:CommentController):Router=>{const router=Router();router.post('/tasks/:taskId/comments',asyncRoute(controller.create));router.get('/tasks/:taskId/comments',asyncRoute(controller.list));router.patch('/comments/:commentId',asyncRoute(controller.update));router.delete('/comments/:commentId',asyncRoute(controller.delete));return router;};

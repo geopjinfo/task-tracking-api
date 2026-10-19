@@ -91,11 +91,15 @@ paths:
       responses: { '200': { description: Updated assignment }, '404': { $ref: '#/components/responses/NotFound' }, '409': { description: Version conflict } }
   /tasks/{taskId}/comments:
     parameters: [{ $ref: '#/components/parameters/TaskId' }]
-    get: { security: [{ bearerAuth: [] }], responses: { '200': { description: Ordered comments } } }
+    get: { security: [{ bearerAuth: [] }], parameters: [{ $ref: '#/components/parameters/Limit' }, { $ref: '#/components/parameters/Cursor' }], responses: { '200': { description: Ordered comments } } }
     post:
       security: [{ bearerAuth: [] }]
       requestBody: { required: true, content: { application/json: { schema: { type: object, additionalProperties: false, required: [body], properties: { body: { type: string, minLength: 1, maxLength: 5000 } } } } } }
       responses: { '201': { description: Comment created }, '422': { $ref: '#/components/responses/ValidationError' } }
+  /comments/{commentId}:
+    parameters: [{ in: path, name: commentId, required: true, schema: { type: string, format: uuid } }]
+    patch: { security: [{ bearerAuth: [] }], requestBody: { required: true, content: { application/json: { schema: { type: object, additionalProperties: false, required: [body], properties: { body: { type: string, minLength: 1, maxLength: 5000 } } } } } }, responses: { '200': { description: Comment updated }, '403': { description: Author required }, '409': { description: Comment deleted or changed } } }
+    delete: { security: [{ bearerAuth: [] }], responses: { '204': { description: Comment soft-deleted }, '403': { description: Author required } } }
   /tasks/{taskId}/attachments/upload-intents:
     parameters: [{ $ref: '#/components/parameters/TaskId' }]
     post:
@@ -111,6 +115,9 @@ paths:
   /attachments/{attachmentId}/download:
     parameters: [{ $ref: '#/components/parameters/AttachmentId' }]
     get: { security: [{ bearerAuth: [] }], responses: { '200': { description: Authorized signed download }, '404': { $ref: '#/components/responses/NotFound' }, '503': { description: Storage unavailable } } }
+  /attachments/{attachmentId}:
+    parameters: [{ $ref: '#/components/parameters/AttachmentId' }]
+    delete: { security: [{ bearerAuth: [] }], responses: { '204': { description: Attachment metadata soft-deleted and private object removed }, '404': { $ref: '#/components/responses/NotFound' } } }
   /notifications:
     get:
       security: [{ bearerAuth: [] }]
