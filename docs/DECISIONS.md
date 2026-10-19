@@ -31,3 +31,11 @@
 ## Backend-neutral observability
 
 **Status:** Accepted. Pino JSON logs and AsyncLocalStorage request context are always available. OpenTelemetry export and the local Grafana stack are optional. Application code has no Loki-specific client dependency.
+
+## Transactional outbox with bounded leases
+
+**Status:** Accepted. Mutations that create delivery obligations write an outbox event in the same MongoDB transaction. A worker claims one event with a 30-second lease, deduplicates recipients, upserts notifications by `eventId:recipientId`, and publishes best-effort Redis hints. Durable inbox reconciliation remains authoritative if publication fails or a client disconnects.
+
+## Fail-closed authentication rate limiting
+
+**Status:** Accepted. Authentication endpoints use Redis counters with short TTLs. If Redis is unavailable, these sensitive endpoints return a temporary dependency error instead of accepting unlimited password attempts; authenticated business operations remain independent of the limiter.

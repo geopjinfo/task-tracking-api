@@ -9,3 +9,5 @@ Refresh tokens are random opaque values stored only as SHA-256 hashes. Rotation 
 Attachment creation stores pending metadata and returns a ten-minute upload URL. Confirmation verifies the object before marking it ready. Download performs current membership authorization before returning a five-minute URL.
 
 External responses are parsed from `unknown`. OpenRouter receives bounded context and returns an unpersisted draft. Email failure is logged and does not roll back invitation creation.
+
+Assignment and collaboration mutations create typed outbox records. The worker atomically claims available work with a bounded lease, increments attempts, creates each recipient notification through a unique delivery key, and publishes a Redis hint only after durable persistence. Self-notifications and duplicate recipients are removed. Expired work leases are eligible for retry.
