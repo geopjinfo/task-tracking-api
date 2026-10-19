@@ -2,19 +2,34 @@ openapi: 3.1.0
 info: { title: Task Tracking API, version: 1.0.0 }
 servers: [{ url: http://localhost:3000/api/v1 }]
 components:
-  securitySchemes: { bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT } }
+  securitySchemes: { bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }, refreshCookie: { type: apiKey, in: cookie, name: refresh_token } }
   schemas:
     Error: { type: object, required: [error], properties: { error: { type: object, required: [code, message], properties: { code: { type: string }, message: { type: string }, requestId: { type: string } } } } }
     Task: { type: object, required: [id, projectId, title, status, version], properties: { id: { type: string, format: uuid }, projectId: { type: string, format: uuid }, title: { type: string }, description: { type: string }, status: { enum: [todo, in_progress, done] }, assigneeId: { type: string, format: uuid }, version: { type: integer } } }
+    Project: { type: object, required: [id, name, ownerId, createdAt, updatedAt], properties: { id: { type: string, format: uuid }, name: { type: string }, description: { type: string }, ownerId: { type: string, format: uuid }, createdAt: { type: string, format: date-time }, updatedAt: { type: string, format: date-time } } }
+    Membership: { type: object, required: [id, projectId, userId, role], properties: { id: { type: string, format: uuid }, projectId: { type: string, format: uuid }, userId: { type: string, format: uuid }, role: { enum: [owner, admin, member] } } }
+    Comment: { type: object, required: [id, taskId, authorId, body, createdAt], properties: { id: { type: string, format: uuid }, taskId: { type: string, format: uuid }, authorId: { type: string, format: uuid }, body: { type: string }, createdAt: { type: string, format: date-time } } }
+    Notification: { type: object, required: [id, recipientId, projectId, type, title, body, createdAt], properties: { id: { type: string, format: uuid }, recipientId: { type: string, format: uuid }, projectId: { type: string, format: uuid }, taskId: { type: string, format: uuid }, type: { type: string }, title: { type: string }, body: { type: string }, readAt: { type: string, format: date-time }, createdAt: { type: string, format: date-time } } }
+  parameters:
+    ProjectId: { in: path, name: projectId, required: true, schema: { type: string, format: uuid } }
+    TaskId: { in: path, name: taskId, required: true, schema: { type: string, format: uuid } }
+    AttachmentId: { in: path, name: attachmentId, required: true, schema: { type: string, format: uuid } }
+    Limit: { in: query, name: limit, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+    Cursor: { in: query, name: cursor, schema: { type: string, maxLength: 1000 } }
+  responses:
+    ValidationError: { description: Validation failed, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    Unauthorized: { description: Authentication required or invalid, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    NotFound: { description: Resource absent or concealed, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
 paths:
   /auth/register:
     post:
       summary: Register
+      security: []
       requestBody: { required: true, content: { application/json: { schema: { type: object, required: [email, displayName, password], properties: { email: { type: string, format: email }, displayName: { type: string }, password: { type: string, minLength: 10 } } } } } }
       responses: { '201': { description: Registered }, '409': { description: Email exists } }
-  /auth/login: { post: { summary: Login, responses: { '200': { description: Authenticated }, '401': { description: Invalid credentials } } } }
-  /auth/refresh: { post: { summary: Rotate refresh token, responses: { '200': { description: Rotated }, '401': { description: Invalid or replayed token } } } }
-  /auth/logout: { post: { summary: Revoke session, responses: { '204': { description: Logged out } } } }
+  /auth/login: { post: { summary: Login, security: [], responses: { '200': { description: Authenticated }, '401': { description: Invalid credentials } } } }
+  /auth/refresh: { post: { summary: Rotate refresh token, security: [{ refreshCookie: [] }], responses: { '200': { description: Rotated }, '401': { description: Invalid or replayed token } } } }
+  /auth/logout: { post: { summary: Revoke session, security: [{ refreshCookie: [] }], responses: { '204': { description: Logged out } } } }
   /users/me: { get: { security: [{ bearerAuth: [] }], responses: { '200': { description: Profile } } }, patch: { security: [{ bearerAuth: [] }], responses: { '200': { description: Updated } } } }
   /projects: { get: { security: [{ bearerAuth: [] }], responses: { '200': { description: Projects } } }, post: { security: [{ bearerAuth: [] }], responses: { '201': { description: Created } } } }
   /projects/{projectId}/tasks:
@@ -28,3 +43,76 @@ paths:
     delete: { security: [{ bearerAuth: [] }], responses: { '204': { description: Deleted } } }
   /notifications/stream: { get: { security: [{ bearerAuth: [] }], responses: { '200': { description: Server-sent event stream, content: { text/event-stream: { schema: { type: string } } } } } } }
   /ai/tasks/description-draft: { post: { security: [{ bearerAuth: [] }], responses: { '200': { description: Unpersisted draft }, '503': { description: Provider not configured } } } }
+  /projects/{projectId}:
+    parameters: [{ $ref: '#/components/parameters/ProjectId' }]
+    get: { security: [{ bearerAuth: [] }], responses: { '200': { description: Visible project, content: { application/json: { schema: { $ref: '#/components/schemas/Project' } } } }, '404': { $ref: '#/components/responses/NotFound' } } }
+    patch:
+      security: [{ bearerAuth: [] }]
+      requestBody: { required: true, content: { application/json: { schema: { type: object, additionalProperties: false, properties: { name: { type: string, minLength: 2, maxLength: 120 }, description: { type: string, maxLength: 2000 } } } } } }
+      responses: { '200': { description: Updated project }, '404': { $ref: '#/components/responses/NotFound' }, '422': { $ref: '#/components/responses/ValidationError' } }
+  /projects/{projectId}/members:
+    parameters: [{ $ref: '#/components/parameters/ProjectId' }]
+    get: { security: [{ bearerAuth: [] }], responses: { '200': { description: Project members }, '404': { $ref: '#/components/responses/NotFound' } } }
+  /projects/{projectId}/invitations:
+    parameters: [{ $ref: '#/components/parameters/ProjectId' }]
+    post:
+      security: [{ bearerAuth: [] }]
+      requestBody: { required: true, content: { application/json: { schema: { type: object, additionalProperties: false, required: [email], properties: { email: { type: string, format: email }, role: { enum: [admin, member], default: member } } } } } }
+      responses: { '201': { description: Invitation created and mail queued }, '404': { $ref: '#/components/responses/NotFound' }, '422': { $ref: '#/components/responses/ValidationError' } }
+  /invitations/{token}/accept:
+    parameters: [{ in: path, name: token, required: true, schema: { type: string, minLength: 20, maxLength: 200 } }]
+    post: { security: [{ bearerAuth: [] }], responses: { '200': { description: Invitation accepted or previously accepted }, '404': { $ref: '#/components/responses/NotFound' }, '410': { description: Invitation expired } } }
+  /tasks/assigned-to-me:
+    get:
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/Limit' }, { $ref: '#/components/parameters/Cursor' }]
+      responses: { '200': { description: Assigned tasks page }, '401': { $ref: '#/components/responses/Unauthorized' } }
+  /tasks/{taskId}/status:
+    parameters: [{ $ref: '#/components/parameters/TaskId' }]
+    patch:
+      security: [{ bearerAuth: [] }]
+      requestBody: { required: true, content: { application/json: { schema: { type: object, additionalProperties: false, required: [status, version], properties: { status: { enum: [todo, in_progress, done] }, version: { type: integer, minimum: 1 } } } } } }
+      responses: { '200': { description: Updated task }, '409': { description: Version conflict }, '422': { description: Invalid transition } }
+  /tasks/{taskId}/assignee:
+    parameters: [{ $ref: '#/components/parameters/TaskId' }]
+    patch:
+      security: [{ bearerAuth: [] }]
+      requestBody: { required: true, content: { application/json: { schema: { type: object, additionalProperties: false, required: [version], properties: { assigneeId: { oneOf: [{ type: string, format: uuid }, { type: 'null' }] }, version: { type: integer, minimum: 1 } } } } } }
+      responses: { '200': { description: Updated assignment }, '404': { $ref: '#/components/responses/NotFound' }, '409': { description: Version conflict } }
+  /tasks/{taskId}/comments:
+    parameters: [{ $ref: '#/components/parameters/TaskId' }]
+    get: { security: [{ bearerAuth: [] }], responses: { '200': { description: Ordered comments } } }
+    post:
+      security: [{ bearerAuth: [] }]
+      requestBody: { required: true, content: { application/json: { schema: { type: object, additionalProperties: false, required: [body], properties: { body: { type: string, minLength: 1, maxLength: 5000 } } } } } }
+      responses: { '201': { description: Comment created }, '422': { $ref: '#/components/responses/ValidationError' } }
+  /tasks/{taskId}/attachments/upload-intents:
+    parameters: [{ $ref: '#/components/parameters/TaskId' }]
+    post:
+      security: [{ bearerAuth: [] }]
+      requestBody: { required: true, content: { application/json: { schema: { type: object, additionalProperties: false, required: [fileName, contentType, size], properties: { fileName: { type: string, minLength: 1, maxLength: 255 }, contentType: { type: string, minLength: 3, maxLength: 120 }, size: { type: integer, minimum: 1, maximum: 10000000 } } } } } }
+      responses: { '201': { description: Private signed upload intent }, '422': { $ref: '#/components/responses/ValidationError' }, '503': { description: Storage unavailable } }
+  /tasks/{taskId}/attachments/complete:
+    parameters: [{ $ref: '#/components/parameters/TaskId' }]
+    post:
+      security: [{ bearerAuth: [] }]
+      requestBody: { required: true, content: { application/json: { schema: { type: object, additionalProperties: false, required: [attachmentId], properties: { attachmentId: { type: string, format: uuid } } } } } }
+      responses: { '200': { description: Attachment ready }, '404': { $ref: '#/components/responses/NotFound' }, '503': { description: Storage unavailable } }
+  /attachments/{attachmentId}/download:
+    parameters: [{ $ref: '#/components/parameters/AttachmentId' }]
+    get: { security: [{ bearerAuth: [] }], responses: { '200': { description: Authorized signed download }, '404': { $ref: '#/components/responses/NotFound' }, '503': { description: Storage unavailable } } }
+  /notifications:
+    get:
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/Limit' }, { $ref: '#/components/parameters/Cursor' }]
+      responses: { '200': { description: Durable notification page } }
+  /notifications/unread-count:
+    get: { security: [{ bearerAuth: [] }], responses: { '200': { description: Unread notification count } } }
+  /notifications/{notificationId}/read:
+    parameters: [{ in: path, name: notificationId, required: true, schema: { type: string, format: uuid } }]
+    patch: { security: [{ bearerAuth: [] }], responses: { '204': { description: Marked read }, '404': { $ref: '#/components/responses/NotFound' } } }
+  /notifications/read-all:
+    patch: { security: [{ bearerAuth: [] }], responses: { '204': { description: All visible notifications marked read } } }
+  /ai/tasks/{taskId}/summary:
+    parameters: [{ $ref: '#/components/parameters/TaskId' }]
+    post: { security: [{ bearerAuth: [] }], responses: { '200': { description: Unpersisted grounded summary }, '404': { $ref: '#/components/responses/NotFound' }, '429': { description: AI quota exceeded }, '502': { description: Provider failure }, '503': { description: Provider unavailable } } }
