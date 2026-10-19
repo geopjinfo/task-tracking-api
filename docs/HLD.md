@@ -8,56 +8,75 @@ The system is a backend API for collaborative task tracking. It provides identit
 
 The application is a modular monolith packaged as one image and run as an HTTP API process plus a background worker process. It is separated into identity, users, projects, memberships, tasks, comments, attachments, notifications, AI, and email modules. Each module owns domain, application, ports, infrastructure adapters, HTTP presentation where applicable, and an explicit entry point.
 
-```text
-HTTP controller → application service → domain model
-                              ↓
-                       repository/provider port
-                              ↑
-                 MongoDB/Redis/S3/HTTP adapter
+```mermaid
+flowchart LR
+    HTTP[HTTP controller] --> Service[Application service]
+    Service --> Domain[Domain model]
+    Service --> Port[Repository or provider port]
+    Adapter[MongoDB / Redis / S3 / HTTP adapter] -. implements .-> Port
 ```
 
 Controllers translate HTTP. Services own orchestration, authorization, and transaction intent. Domain objects own invariants. Infrastructure implements ports. Express, MongoDB, Redis, storage SDK, and provider response types do not enter domain entities.
 
 ## System context
 
-```text
-Person using a web/API client
-        │ HTTPS + JSON / SSE
-        ▼
-Task Tracking System
-   ├── MongoDB          durable source of truth
-   ├── Redis            disposable rate limits and live fan-out
-   ├── S3/MinIO         private attachment objects
-   ├── OpenRouter       AI generation provider
-   ├── SMTP/Mailpit     invitation email delivery
-   └── OTLP collector   optional telemetry export
+```mermaid
+flowchart LR
+    Person[User or API client]
+    System[Task Tracking System]
+    ObjectStore[Private object storage]
+    AI[OpenRouter]
+    Email[SMTP provider]
+    Telemetry[Telemetry backend]
+
+    Person -->|HTTPS JSON| System
+    System -->|SSE notifications| Person
+    System -->|signed object operations| ObjectStore
+    System -->|bounded HTTPS generation| AI
+    System -->|invitation delivery| Email
+    System -. optional OTLP .-> Telemetry
 ```
 
 The client and all external provider responses are untrusted. MongoDB is authoritative for business state, outbox events, notification inboxes, membership, and durable usage records.
 
 ## Container and deployment view
 
-```text
-┌─────────────────┐       ┌───────────────────────────────────────┐
-│ Web / API client│──────▶│ Express API                           │
-│                 │◀──────│ auth, validation, modules, REST, SSE  │
-└─────────────────┘       └──────────┬──────────────┬─────────────┘
-                                     │              │
-                              transaction      signed URLs
-                                     │              │
-                               ┌─────▼─────┐   ┌────▼─────┐
-                               │ MongoDB   │   │ MinIO/S3 │
-                               └─────┬─────┘   └──────────┘
-                                     │ outbox
-                               ┌─────▼────────┐
-                               │ Outbox worker│──────▶ SMTP provider
-                               └─────┬────────┘
-                                     │ durable notification first
-                                     ▼
-                                  Redis ─────▶ authenticated SSE
+```mermaid
+flowchart TB
+    Ingress[HTTPS ingress]
 
-Express API ─────▶ OpenRouter (bounded input, validated output, no automatic mutation)
-Express API ─────▶ OTLP collector when explicitly enabled
+    subgraph Runtime[Application runtime]
+        API[Express API replicas]
+        Worker[Outbox and email worker]
+    end
+
+    subgraph State[State services]
+        Mongo[(MongoDB replica set)]
+        Redis[(Redis)]
+        S3[(S3-compatible storage)]
+    end
+
+    subgraph Providers[Outbound providers]
+        OpenRouter[OpenRouter HTTPS API]
+        SMTP[SMTP provider]
+    end
+
+    subgraph Observability[Optional observability profile]
+        Collector[OpenTelemetry collector]
+        Backends[Tempo / Loki / Prometheus / Grafana]
+        Collector --> Backends
+    end
+
+    Ingress --> API
+    API --> Mongo
+    API --> Redis
+    API --> S3
+    API --> OpenRouter
+    Worker --> Mongo
+    Worker --> Redis
+    Worker --> SMTP
+    API -. traces .-> Collector
+    Worker -. traces .-> Collector
 ```
 
 Production uses HTTPS ingress, API replica(s), a worker, MongoDB replica set, Redis, S3-compatible storage, and outbound HTTPS/SMTP. Local Compose provides API, MongoDB replica set, Redis, MinIO, and Mailpit. The optional `observability` profile adds an OTLP collector, Tempo, Loki, Prometheus, and Grafana. Normal application startup does not require that profile.
@@ -103,11 +122,24 @@ Project creation writes project and owner membership in one transaction. Invitat
 
 ### Task mutation and notification
 
-```text
-authenticate → validate → load scope → authorize role/resource
- → update task with expected version + write outbox event in one transaction
- → worker leases event → upsert notification by eventId + recipientId
- → publish Redis hint → authenticated SSE emits live event
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant A as Express API
+    participant M as MongoDB
+    participant W as Outbox worker
+    participant R as Redis
+
+    C->>A: Mutate task with expected version
+    A->>A: Authenticate, validate, and authorize
+    A->>M: Transaction: task update + outbox event
+    M-->>A: Commit
+    A-->>C: Updated task
+    W->>M: Lease outbox event
+    W->>M: Upsert durable notification
+    W->>R: Publish recipient hint
+    R-->>A: Fan-out hint
+    A-->>C: Authenticated SSE event
 ```
 
 REST inbox retrieval is authoritative. Pub/Sub and SSE are best effort; reconnect uses cursor-based REST reconciliation.

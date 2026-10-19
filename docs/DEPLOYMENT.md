@@ -22,7 +22,7 @@ Inspect the image user and scan the final image with the deployment platform's v
 1. Back up MongoDB and confirm the restore procedure and retention window.
 2. Ensure MongoDB, Redis, private object storage, SMTP, and optional OTLP endpoints are reachable through restricted networks.
 3. Apply secrets through the platform secret store. Never bake `.env` into the image.
-4. Start one worker and one API instance. Startup creates idempotent indexes and fails before readiness when required dependencies are unavailable.
+4. Run `npm run migrate` as a deployment step, then start one worker and one API instance. Startup also applies pending migrations idempotently and fails before readiness when required dependencies are unavailable.
 5. Confirm `/health/live` and `/health/ready`, then run registration, project, task, attachment, invitation email, notification, and mocked-AI smoke checks.
 6. Add API replicas only after the first instance passes. Workers safely coordinate through leased MongoDB jobs.
 
@@ -32,7 +32,7 @@ Back up MongoDB with a replica-set-consistent snapshot or `mongodump` using depl
 
 ## Rollback
 
-Application changes in this release are backward-compatible additions and idempotent indexes; there is no destructive migration. To roll back, stop new worker claims, route traffic to the previous immutable image, start its compatible worker, and verify readiness plus core flows. Do not delete collections or indexes during an incident. If a future release introduces a destructive migration, it must ship a separately tested forward-fix and restore plan before deployment.
+Applied migration IDs and timestamps are recorded in `_schema_migrations`. Migration `001-initial-indexes` is additive and idempotent; there is no destructive migration in this release. To roll back, stop new worker claims, route traffic to the previous immutable image, start its compatible worker, and verify readiness plus core flows. Do not delete collections or indexes during an incident. If a future release introduces a destructive migration, it must ship a separately tested forward-fix and restore plan before deployment.
 
 Pending outbox and email jobs remain in MongoDB during a rollback. Leases expire after 30 seconds and can be reclaimed by a compatible worker. Failed jobs retain stable error codes for investigation. Redis loss only affects limits and live fan-out; notification history remains durable.
 

@@ -10,4 +10,5 @@ regexes = [
   '''ai-integration-secret-at-least-32-characters''',
   '''notifications-integration-secret-32-characters''',
   '''collaboration-integration-secret-32-characters''',
+  '''migration-test-secret-at-least-32-characters''',
 ]

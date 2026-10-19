@@ -6,13 +6,21 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with: { node-version: 22, cache: npm }
       - run: npm ci
+      - run: cp .env.example .env
+      - name: Start integration dependencies
+        run: |
+          docker compose up -d mongo redis minio mailpit mongo-init minio-init
+          docker compose wait mongo-init minio-init
       - run: npm run check
       - run: npm run build
+      - run: npm run test:coverage
       - run: npm audit --omit=dev --audit-level=critical
       - uses: gitleaks/gitleaks-action@v2
-      - run: cp .env.example .env
       - run: docker compose config --quiet
+      - name: Stop integration dependencies
+        if: always()
+        run: docker compose down --volumes

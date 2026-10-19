@@ -6,6 +6,31 @@ An Express 5 and strict TypeScript backend for collaborative project and task tr
 
 The application is a modular monolith. Controllers validate HTTP input, application services own workflows and authorization, domain objects enforce invariants, and infrastructure adapters implement typed ports. MongoDB is the durable source of truth. Redis provides rate limiting and transient notification fan-out. MinIO stores private attachment objects. Mailpit captures local email. A separate worker process handles notification outbox and email delivery jobs.
 
+### Infrastructure at a glance
+
+```mermaid
+flowchart LR
+    Client[API client] -->|HTTP / JSON| API[Express API]
+    API --> Mongo[(MongoDB)]
+    API --> Redis[(Redis)]
+    API --> MinIO[(MinIO)]
+    API -->|HTTPS| OpenRouter[OpenRouter]
+    Mongo -->|outbox records| Worker[Outbox worker]
+    Worker --> Mongo
+    Worker --> Redis
+    Worker --> Mailpit[Mailpit SMTP sandbox]
+    Redis -->|live notification hint| API
+
+    classDef runtime fill:#18212f,stroke:#6b7280,color:#f8fafc;
+    classDef data fill:#102a43,stroke:#38bdf8,color:#f8fafc;
+    classDef external fill:#2b1d38,stroke:#c084fc,color:#f8fafc;
+    class API,Worker runtime;
+    class Mongo,Redis,MinIO data;
+    class Mailpit,OpenRouter external;
+```
+
+MongoDB, Redis, MinIO, the API, worker, and Mailpit run in the local Compose environment. OpenRouter is an outbound HTTPS integration, not another locally hosted service. The optional observability profile adds the OpenTelemetry collector, Tempo, Loki, Promtail, Prometheus, and Grafana.
+
 Design details are in [`docs/HLD.md`](docs/HLD.md), [`docs/LLD.md`](docs/LLD.md), [`docs/DATABASE_DESIGN.md`](docs/DATABASE_DESIGN.md), and the consolidated [`docs/DECISIONS.md`](docs/DECISIONS.md).
 
 ## Prerequisites
@@ -59,9 +84,10 @@ npm run check
 npm run build
 npm run test:coverage
 npm run load:smoke
+docker compose run --rm api npm run migrate
 ```
 
-`npm run check` runs strict type checking, type-aware linting, OpenAPI validation, and all automated tests. The load smoke requires the local stack and records latency plus the winning MongoDB index; see [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md).
+Migrations run automatically before the API or worker becomes ready. `docker compose run --rm api npm run migrate` runs the compiled migration entry point explicitly with the Compose environment. `npm run check` runs strict type checking, type-aware linting, OpenAPI validation, and all automated tests. The load smoke requires the local stack and records latency plus the winning MongoDB index; see [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md).
 
 ## API
 

@@ -8,6 +8,10 @@ Unique indexes enforce normalized user email, refresh token hash, invitation tok
 
 References are validated in application services because MongoDB has no foreign keys. Invitation acceptance and project creation use transactions. Cursor pagination uses stable fields plus ID. The one-collection-per-logical-table shape permits a later SQL adapter, but query and migration work would still be required.
 
+## Schema migration policy
+
+Versioned migrations run in lexical order before API or worker readiness and record successful application in `_schema_migrations`. Every migration must be safe to rerun because API and worker processes can start concurrently. The initial `001-initial-indexes` migration creates all required additive indexes. Destructive collection or field changes require an expand-and-contract release, a tested data backfill, and a restore or forward-fix plan; they must not be hidden inside ordinary application startup.
+
 ## Relationship model
 
 ```text
