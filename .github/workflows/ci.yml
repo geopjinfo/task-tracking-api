@@ -32,13 +32,16 @@ jobs:
           for attempt in {1..30}; do docker exec task-ci-mongo mongosh --quiet --eval "if (!db.hello().isWritablePrimary) quit(1)" && break; sleep 2; done
       - name: Initialize MinIO bucket
         run: |
-          for attempt in {1..60}; do
-            if docker exec task-ci-minio sh -c 'mc alias set local http://localhost:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" >/dev/null && mc ready local && mc mb --ignore-existing local/task-attachments'; then
+          docker exec task-ci-minio sh -c 'mc alias set local http://localhost:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" >/dev/null'
+          for attempt in {1..30}; do
+            if timeout 5s docker exec task-ci-minio mc mb --ignore-existing local/task-attachments; then
               exit 0
             fi
             sleep 2
           done
-          docker logs task-ci-minio
+          status=$(docker inspect --format '{{json .State}}' task-ci-minio | tr '\n' ' ')
+          logs=$(docker logs task-ci-minio 2>&1 | tr '\n' ' ')
+          echo "::error title=MinIO bucket initialization failed::$status $logs"
           exit 1
       - name: Wait for Mailpit
         run: |
