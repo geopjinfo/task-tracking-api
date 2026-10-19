@@ -275,7 +275,7 @@ Only transport operations documented as idempotent are automatically retried. Ap
 
 ## Lifecycle and observability
 
-Startup validates configuration before opening listeners, connects MongoDB and Redis, ensures required indexes/bucket readiness, registers modules, starts the worker, then marks readiness. Shutdown marks unready, stops HTTP acceptance and worker claims, closes SSE connections, drains bounded work, flushes telemetry, closes Redis/Mongo/storage clients, and exits within ten seconds.
+Startup validates configuration before opening listeners, connects MongoDB and Redis, ensures required indexes and bucket readiness, and registers modules. The Compose API process serves HTTP with background workers disabled; the worker process uses the same module composition and starts notification and email claim loops without an HTTP listener. A single-process development run may enable both through `RUN_BACKGROUND_WORKERS`. Shutdown stops HTTP acceptance or worker claims, closes SSE connections, flushes telemetry, closes Redis and MongoDB clients, and exits within the configured deadline.
 
 Pino logs use `AsyncLocalStorage` request context. OpenTelemetry traces HTTP, MongoDB, Redis, outbox, storage, AI, and mail boundaries when enabled. Metrics include request duration/error count, active SSE connections, rate-limit decisions, outbox depth/age/retries, and provider latency/failures without user/project label values.
 

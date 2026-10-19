@@ -23,7 +23,7 @@ Factories generate UUIDv7 identifiers and unique normalized emails. Each integra
 
 ## Coverage and release gates
 
-Coverage is evidence, not the objective. The minimum target is 80% lines/branches for domain and application code, with every requirement in `REQUIREMENTS.md` linked to at least one named acceptance scenario. Security-critical branches require explicit tests even when aggregate coverage is already met.
+Coverage is evidence, not the objective. The enforced repository floor is 80% statements, functions, and lines plus 70% branches. Every requirement in `REQUIREMENTS.md` links to at least one named acceptance scenario. Security-critical branches require explicit tests even when aggregate coverage is already met; the lower branch floor does not waive those cases.
 
 Release requires:
 

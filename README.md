@@ -1,23 +1,78 @@
 # Task Tracking API
 
-Backend API for collaborative project and task tracking. It uses Express 5, strict TypeScript, MongoDB, Redis, MinIO, Mailpit and optional OpenTelemetry export.
+An Express 5 and strict TypeScript backend for collaborative project and task tracking. It includes rotating refresh sessions, project roles, invitations, tasks, comments, private attachments, durable notifications with SSE, OpenRouter-assisted drafts and summaries, and asynchronous invitation email.
 
-## Local setup
+## Architecture
 
-1. Copy `.env.example` to `.env` and replace `JWT_SECRET`. Add `OPENROUTER_API_KEY` only when testing live AI requests.
-2. Run `docker compose up --build`.
-3. Open Mailpit at `http://localhost:8025`. The API is at `http://localhost:3000/api/v1`.
+The application is a modular monolith. Controllers validate HTTP input, application services own workflows and authorization, domain objects enforce invariants, and infrastructure adapters implement typed ports. MongoDB is the durable source of truth. Redis provides rate limiting and transient notification fan-out. MinIO stores private attachment objects. Mailpit captures local email. A separate worker process handles notification outbox and email delivery jobs.
 
-The optional monitoring services start with `docker compose --profile observability up --build`. They are not required by the API.
+Design details are in [`docs/HLD.md`](docs/HLD.md), [`docs/LLD.md`](docs/LLD.md), [`docs/DATABASE_DESIGN.md`](docs/DATABASE_DESIGN.md), and the consolidated [`docs/DECISIONS.md`](docs/DECISIONS.md).
 
-## Quality checks
+## Prerequisites
 
-Run `npm ci`, then `npm run check` and `npm run build`. Health endpoints are `/health/live` and `/health/ready`.
+- Docker Desktop with Compose
+- Node.js 22 or newer for local tests and development
 
-With the local stack running, `npm run load:smoke` exercises the indexed task-list path and records latency plus its MongoDB explain result. See [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md).
+## Start locally
 
-## Security notes
+1. Copy `.env.example` to `.env`.
+2. Replace `JWT_SECRET` with a value of at least 32 characters. Leave `OPENROUTER_API_KEY` blank unless exercising live AI calls.
+3. Run `docker compose up --build`.
+4. Wait for `docker compose ps` to show the API, MongoDB, Redis, MinIO, and Mailpit as healthy or running.
 
-Access tokens are returned to the client; refresh tokens use an HTTP-only cookie. Production deployments must enable secure cookies and HTTPS. Attachments are private and accessed using short-lived signed URLs after project authorization. Provider keys and user secrets must never be committed.
+The API root is `http://localhost:3000/api/v1`, readiness is `http://localhost:3000/health/ready`, Mailpit is `http://localhost:8025`, and the MinIO console is `http://localhost:9001`. Compose initializes the MongoDB replica set and private attachment bucket before starting the API and worker.
 
-The complete threat model and operational controls are in [`docs/SECURITY.md`](docs/SECURITY.md).
+The optional observability stack starts with:
+
+```sh
+docker compose --profile observability up --build
+```
+
+It adds an OpenTelemetry collector, Tempo, Loki, Prometheus, and Grafana without making them application dependencies.
+
+## Environment
+
+| Variable | Purpose | Local default/template |
+|---|---|---|
+| `PUBLIC_URL` | Trusted browser origin and invitation-link base | `http://localhost:3000` |
+| `MONGODB_URI` | Replica-set MongoDB connection | Compose MongoDB |
+| `REDIS_URL` | Rate limiting, AI quota, and SSE fan-out | Compose Redis |
+| `JWT_SECRET` | HS256 access-token signing key | Must be replaced |
+| `COOKIE_SECURE` | Require HTTPS refresh cookies | `false` locally; required in production |
+| `S3_*` | Private S3-compatible attachment storage | Compose MinIO |
+| `SMTP_HOST`, `SMTP_PORT`, `MAIL_FROM` | Invitation delivery adapter | Compose Mailpit |
+| `OPENROUTER_API_KEY` | Optional OpenRouter credential | Blank disables AI endpoints safely |
+| `OPENROUTER_MODEL` | Provider model identifier | Template value in `.env.example` |
+| `OTEL_ENABLED` | Export traces through OTLP | `false` |
+| `RUN_BACKGROUND_WORKERS` | Run delivery workers in this process | Compose overrides API to `false` and worker to `true` |
+
+Every supported variable and bounded default is listed in `.env.example` and validated before startup. No secret belongs in Git.
+
+## Commands
+
+```sh
+npm ci
+npm run dev
+npm run check
+npm run build
+npm run test:coverage
+npm run load:smoke
+```
+
+`npm run check` runs strict type checking, type-aware linting, OpenAPI validation, and all automated tests. The load smoke requires the local stack and records latency plus the winning MongoDB index; see [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md).
+
+## API
+
+[`docs/openapi.yaml`](docs/openapi.yaml) is the normative OpenAPI 3.1 contract. Human-readable conventions are in [`docs/API_DESIGN.md`](docs/API_DESIGN.md), and executable request examples are in [`docs/API_EXAMPLES.md`](docs/API_EXAMPLES.md). All protected routes use `Authorization: Bearer <access-token>`. Refresh and logout use the HTTP-only refresh cookie plus an exact trusted `Origin` header.
+
+## Security and operations
+
+The threat model is in [`docs/SECURITY.md`](docs/SECURITY.md). Production requires HTTPS, secure cookies, managed secrets, private data services, encrypted backups, and restricted logs. Deployment, backup, rollback, and failure procedures are in [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
+
+## Known boundaries
+
+- OpenRouter calls are unavailable without a configured key; all deterministic tests use a fake provider.
+- SMTP is at-least-once if a process crashes after provider acceptance but before acknowledgement.
+- Redis Pub/Sub is not durable; clients reconcile notifications through REST after reconnecting.
+- The local performance result is a smoke measurement, not a production capacity guarantee.
+- WebSockets, notification digests, analytics, billing, Kubernetes, and an advanced audit ledger are outside this release.

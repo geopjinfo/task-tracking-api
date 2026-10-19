@@ -6,7 +6,7 @@ The system is a backend API for collaborative task tracking. It provides identit
 
 ## Architectural style
 
-The application is a modular monolith: one deployable API plus an outbox worker, separated into identity, users, projects, memberships, tasks, comments, attachments, notifications, AI, and email modules. Each module owns domain, application, ports, infrastructure adapters, HTTP presentation, and an explicit entry point.
+The application is a modular monolith packaged as one image and run as an HTTP API process plus a background worker process. It is separated into identity, users, projects, memberships, tasks, comments, attachments, notifications, AI, and email modules. Each module owns domain, application, ports, infrastructure adapters, HTTP presentation where applicable, and an explicit entry point.
 
 ```text
 HTTP controller → application service → domain model
