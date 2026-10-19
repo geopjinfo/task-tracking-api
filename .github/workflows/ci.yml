@@ -18,7 +18,7 @@ jobs:
       - name: Start Redis
         run: docker run -d --name task-ci-redis --network task-tracking-ci -p 6379:6379 redis:8-alpine
       - name: Start MinIO
-        run: docker run -d --name task-ci-minio --network task-tracking-ci -p 9000:9000 -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin minio/minio:latest server /data
+        run: docker run -d --name task-ci-minio --network task-tracking-ci -p 9000:9000 -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin minio/minio:RELEASE.2025-09-07T16-13-09Z server /data
       - name: Start Mailpit
         run: docker run -d --name task-ci-mailpit --network task-tracking-ci -p 1025:1025 -p 8025:8025 axllent/mailpit:latest
       - name: Initialize MongoDB replica set
