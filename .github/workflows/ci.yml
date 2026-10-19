@@ -12,9 +12,7 @@ jobs:
       - run: npm ci
       - run: cp .env.example .env
       - name: Start integration dependencies
-        run: |
-          docker compose up -d mongo redis minio mailpit mongo-init minio-init
-          docker compose wait mongo-init minio-init
+        run: docker compose up -d --build --wait --wait-timeout 180
       - run: npm run check
       - run: npm run build
       - run: npm run test:coverage
