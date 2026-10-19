@@ -94,6 +94,8 @@ The stream responds with `connected`, `notification`, and optional `error` event
 
 Description drafting accepts project ID, bounded title, and bounded context. Summary derives task/comments server-side from `taskId`. Responses contain generated text, configured model identifier, and `persisted:false`. Provider keys, raw provider responses, token accounting internals, and prompts are not returned.
 
+Redis enforces a configurable per-user/project hourly request quota. OpenRouter receives a fixed instruction and serialized untrusted data in separate messages, with bounded output tokens and a configured timeout. HTTP 429 and transient 5xx responses receive at most two bounded retries. Malformed JSON, invalid shapes, empty output, output-budget overrun, timeout, denial, and unavailable quota service map to stable errors without returning provider bodies. MongoDB stores only feature, model, unit counts, actor/project IDs, and timestamp—not prompts or generated text.
+
 ## Contract verification
 
 `openapi.yaml` is the normative wire contract. CI validates OpenAPI 3.1 syntax and compares registered method/path pairs with the specification. Supertest acceptance cases validate representative success and every documented error family. Implementation DTOs may be generated or manually typed, but discrepancies fail the release gate.

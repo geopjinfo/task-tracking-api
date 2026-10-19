@@ -46,7 +46,11 @@ paths:
     patch: { security: [{ bearerAuth: [] }], responses: { '200': { description: Updated }, '409': { description: Version conflict } } }
     delete: { security: [{ bearerAuth: [] }], responses: { '204': { description: Deleted } } }
   /notifications/stream: { get: { security: [{ bearerAuth: [] }], responses: { '200': { description: Server-sent event stream, content: { text/event-stream: { schema: { type: string } } } } } } }
-  /ai/tasks/description-draft: { post: { security: [{ bearerAuth: [] }], responses: { '200': { description: Unpersisted draft }, '503': { description: Provider not configured } } } }
+  /ai/tasks/description-draft:
+    post:
+      security: [{ bearerAuth: [] }]
+      requestBody: { required: true, content: { application/json: { schema: { type: object, additionalProperties: false, required: [projectId, title], properties: { projectId: { type: string, format: uuid }, title: { type: string, minLength: 1, maxLength: 200 }, context: { type: string, maxLength: 4000, default: '' } } } } } }
+      responses: { '200': { description: Unpersisted draft }, '404': { $ref: '#/components/responses/NotFound' }, '429': { description: AI quota or provider rate limit exceeded }, '502': { description: Invalid or unavailable provider response }, '503': { description: Provider or quota service not configured }, '504': { description: Provider timeout } }
   /projects/{projectId}:
     parameters: [{ $ref: '#/components/parameters/ProjectId' }]
     get: { security: [{ bearerAuth: [] }], responses: { '200': { description: Visible project, content: { application/json: { schema: { $ref: '#/components/schemas/Project' } } } }, '404': { $ref: '#/components/responses/NotFound' } } }
@@ -132,4 +136,4 @@ paths:
     patch: { security: [{ bearerAuth: [] }], responses: { '204': { description: All visible notifications marked read } } }
   /ai/tasks/{taskId}/summary:
     parameters: [{ $ref: '#/components/parameters/TaskId' }]
-    post: { security: [{ bearerAuth: [] }], responses: { '200': { description: Unpersisted grounded summary }, '404': { $ref: '#/components/responses/NotFound' }, '429': { description: AI quota exceeded }, '502': { description: Provider failure }, '503': { description: Provider unavailable } } }
+    post: { security: [{ bearerAuth: [] }], responses: { '200': { description: Unpersisted grounded summary }, '404': { $ref: '#/components/responses/NotFound' }, '429': { description: AI quota or provider rate limit exceeded }, '502': { description: Invalid or unavailable provider response }, '503': { description: Provider or quota service unavailable }, '504': { description: Provider timeout } } }
