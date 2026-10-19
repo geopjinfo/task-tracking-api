@@ -1,4 +1,5 @@
 import cookieParser from 'cookie-parser'; import cors from 'cors'; import express from 'express';
+import helmet from 'helmet';
 import pino from 'pino'; import { pinoHttp } from 'pino-http';
 import type { Logger } from 'pino';
 import type { RedisClient } from './platform/redis/redis.client.js';
@@ -23,7 +24,7 @@ export type BackgroundWorkers={notifications:OutboxWorker;email:EmailDeliveryWor
 export function createApp(db:Database,config:Config,redis:RedisClient,injectedLogger?:Logger,registerWorkers?:(workers:BackgroundWorkers)=>void){
  const app=express();
  const logger=injectedLogger??pino({level:config.LOG_LEVEL,redact:['req.headers.authorization','req.headers.cookie','password','token','refreshToken','OPENROUTER_API_KEY']});
- app.disable('x-powered-by');app.set('trust proxy',config.TRUST_PROXY);app.use(contextMiddleware,pinoHttp({logger}),cors({origin:config.PUBLIC_URL,credentials:true}),express.json({limit:'1mb'}),cookieParser());
+ app.disable('x-powered-by');app.set('trust proxy',config.TRUST_PROXY);app.use(contextMiddleware,pinoHttp({logger}),helmet(),cors({origin:new URL(config.PUBLIC_URL).origin,credentials:true}),express.json({limit:'1mb'}),cookieParser());
  const api=express.Router(),protectedApi=express.Router(),identity=createIdentityModule(db,config,createAuthRateLimiter(redis)),projects=createProjectModule(db,identity.userRepository,config.PUBLIC_URL),taskModule=createTaskModule(db,projects.access),comments=createCommentModule(db,taskModule.service),attachments=createAttachmentModule(db,config,taskModule.service,projects.access),notifications=createNotificationModule(db,redis,projects.access),email=createEmailModule(db,config),ai=createAiModule(db,redis,config,projects.access,taskModule.service,comments.service);registerWorkers?.({notifications:notifications.worker,email:email.worker});
  api.use('/auth',identity.publicRoutes);protectedApi.use(identity.authentication,identity.profileRoutes);
  registerModules(protectedApi,[projects,taskModule,comments,attachments,notifications,ai]);

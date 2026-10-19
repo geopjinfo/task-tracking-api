@@ -62,4 +62,14 @@ describe('identity HTTP flows',()=>{
   for(let index=0;index<21;index+=1)status=(await request(app).post('/api/v1/auth/login').send({})).status;
   expect(status).toBe(429);
  });
+
+ it('applies security headers and restricts credentialed CORS',async()=>{
+  await redis.flushDb();
+  const allowed=await request(app).options('/api/v1/auth/login').set('Origin','http://localhost:3000').set('Access-Control-Request-Method','POST');
+  expect(allowed.status).toBe(204);expect(allowed.headers['access-control-allow-origin']).toBe('http://localhost:3000');expect(allowed.headers['access-control-allow-credentials']).toBe('true');
+  const denied=await request(app).options('/api/v1/auth/login').set('Origin','https://attacker.example').set('Access-Control-Request-Method','POST');
+  expect(denied.headers['access-control-allow-origin']).toBe('http://localhost:3000');expect(denied.headers['access-control-allow-origin']).not.toBe('https://attacker.example');
+  const response=await request(app).get('/health/live');
+  expect(response.headers['x-content-type-options']).toBe('nosniff');expect(response.headers['x-frame-options']).toBe('SAMEORIGIN');expect(response.headers['strict-transport-security']).toContain('max-age=');expect(response.headers['x-powered-by']).toBeUndefined();
+ });
 });

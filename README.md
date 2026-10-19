@@ -14,6 +14,10 @@ The optional monitoring services start with `docker compose --profile observabil
 
 Run `npm ci`, then `npm run check` and `npm run build`. Health endpoints are `/health/live` and `/health/ready`.
 
+With the local stack running, `npm run load:smoke` exercises the indexed task-list path and records latency plus its MongoDB explain result. See [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md).
+
 ## Security notes
 
 Access tokens are returned to the client; refresh tokens use an HTTP-only cookie. Production deployments must enable secure cookies and HTTPS. Attachments are private and accessed using short-lived signed URLs after project authorization. Provider keys and user secrets must never be committed.
+
+The complete threat model and operational controls are in [`docs/SECURITY.md`](docs/SECURITY.md).

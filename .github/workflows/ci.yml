@@ -12,6 +12,7 @@ jobs:
       - run: npm ci
       - run: npm run check
       - run: npm run build
-      - run: npm audit --omit=dev
+      - run: npm audit --omit=dev --audit-level=critical
+      - uses: gitleaks/gitleaks-action@v2
       - run: cp .env.example .env
       - run: docker compose config --quiet

@@ -10,4 +10,5 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: npm }
       - run: npm ci
-      - run: npm audit --omit=dev
+      - run: npm audit --omit=dev --audit-level=critical
+      - uses: gitleaks/gitleaks-action@v2
