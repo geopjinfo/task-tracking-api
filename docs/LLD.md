@@ -73,8 +73,9 @@ Decorators are not used for routing or authorization. Explicit Express middlewar
 ```ts
 type Page<T> = { items: T[]; nextCursor?: string };
 
+type TransactionContext = { readonly id: string };
 type TransactionManager = {
-  run<T>(work: (tx: Transaction) => Promise<T>): Promise<T>;
+  run<T>(work: (context: TransactionContext) => Promise<T>): Promise<T>;
 };
 
 type AppErrorCode =
@@ -89,25 +90,25 @@ Public DTOs use UUID strings and ISO-8601 timestamps. Mongo documents are mapped
 
 ```ts
 interface UserRepository {
-  insert(user: User, tx?: Transaction): Promise<boolean>;
-  findById(id: string, tx?: Transaction): Promise<User | null>;
-  findByEmail(email: NormalizedEmail, tx?: Transaction): Promise<User | null>;
+  insert(user: User, context?: TransactionContext): Promise<boolean>;
+  findById(id: string, context?: TransactionContext): Promise<User | null>;
+  findByEmail(email: NormalizedEmail, context?: TransactionContext): Promise<User | null>;
   updateProfile(id: string, changes: ProfileChanges): Promise<User | null>;
 }
 
 interface SessionRepository {
-  insert(session: Session, tx?: Transaction): Promise<void>;
-  findByTokenHash(hash: string, tx?: Transaction): Promise<Session | null>;
-  rotate(id: string, replacement: Session, tx: Transaction): Promise<boolean>;
-  revokeFamily(familyId: string, at: Date, tx?: Transaction): Promise<void>;
+  insert(session: Session, context?: TransactionContext): Promise<void>;
+  findByTokenHash(hash: string, context?: TransactionContext): Promise<Session | null>;
+  rotate(id: string, replacement: Session, context: TransactionContext): Promise<boolean>;
+  revokeFamily(familyId: string, at: Date, context?: TransactionContext): Promise<void>;
 }
 
 interface TaskRepository {
-  insert(task: Task, tx?: Transaction): Promise<void>;
-  findById(id: string, tx?: Transaction): Promise<Task | null>;
+  insert(task: Task, context?: TransactionContext): Promise<void>;
+  findById(id: string, context?: TransactionContext): Promise<Task | null>;
   search(query: TaskQuery): Promise<Page<Task>>;
-  update(task: Task, expectedVersion: number, tx?: Transaction): Promise<boolean>;
-  delete(id: string, tx?: Transaction): Promise<boolean>;
+  update(task: Task, expectedVersion: number, context?: TransactionContext): Promise<boolean>;
+  delete(id: string, context?: TransactionContext): Promise<boolean>;
 }
 
 interface ObjectStorage {

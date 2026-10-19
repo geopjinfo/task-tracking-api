@@ -1,28 +1,18 @@
 import { randomUUID } from 'node:crypto';
-import { afterAll,beforeAll,describe,expect,it } from 'vitest';
+import { afterAll,beforeAll,describe,expect,it,vi } from 'vitest';
+import type { Db } from 'mongodb';
 import { loadConfig } from '../../src/config/index.js';
 import { Database } from '../../src/platform/database/mongo.database.js';
-import { migrations,type MigrationRecord } from '../../src/platform/database/migrations.js';
-
+import { MigrationRunner,migrations,type Migration,type MigrationRecord } from '../../src/platform/database/migrations.js';
 const databaseName=`migration_test_${randomUUID().replaceAll('-','')}`;
-const config=loadConfig({
- NODE_ENV:'test',LOG_LEVEL:'silent',PUBLIC_URL:'http://localhost:3000',
- MONGODB_URI:`mongodb://localhost:27017/${databaseName}?replicaSet=rs0&directConnection=true`,
- REDIS_URL:'redis://localhost:6379/9',JWT_SECRET:'migration-test-secret-at-least-32-characters',
- S3_ENDPOINT:'http://localhost:9000',S3_BUCKET:'task-attachments',S3_ACCESS_KEY:'minioadmin',S3_SECRET_KEY:'minioadmin'
-});
-const database=new Database(config);
-
-beforeAll(async()=>database.connect());
-afterAll(async()=>{await database.client.db().dropDatabase();await database.close()});
-
+const config=loadConfig({NODE_ENV:'test',LOG_LEVEL:'silent',PUBLIC_URL:'http://localhost:3000',MONGODB_URI:`mongodb://localhost:27017/${databaseName}?replicaSet=rs0&directConnection=true`,REDIS_URL:'redis://localhost:6379/9',JWT_SECRET:'migration-test-secret-at-least-32-characters',S3_ENDPOINT:'http://localhost:9000',S3_BUCKET:'task-attachments',S3_ACCESS_KEY:'minioadmin',S3_SECRET_KEY:'minioadmin'});
+const database=new Database(config);let db:Db;
+beforeAll(async()=>{await database.connect({runMigrations:false});db=database.raw();});
+afterAll(async()=>{await db.dropDatabase();await database.close();});
 describe('database migrations',()=>{
- it('records every applied migration exactly once across repeated startup',async()=>{
-  await database.close();
-  await database.connect();
-  const records=await database.collection<MigrationRecord>('_schema_migrations').find().sort({id:1}).toArray();
-  expect(records.map(record=>record.id)).toEqual(migrations.map(migration=>migration.id));
-  expect(records).toHaveLength(migrations.length);
-  expect(records.every(record=>record.appliedAt instanceof Date)).toBe(true);
- });
+ it('applies migrations in order once and records checksums',async()=>{const runner=new MigrationRunner(db);await runner.up();await runner.up();const records=await db.collection<MigrationRecord>('schema_migrations').find().sort({version:1}).toArray();expect(records.map(record=>record.version)).toEqual(migrations.map(migration=>migration.version));expect(records.every(record=>/^[a-f0-9]{64}$/.test(record.checksum))).toBe(true);expect((await runner.status()).every(item=>item.state==='applied')).toBe(true);});
+ it('supports down followed by deterministic reapplication',async()=>{const runner=new MigrationRunner(db);await runner.down();expect((await runner.status())[0]?.state).toBe('pending');await runner.up();expect((await runner.status())[0]?.state).toBe('applied');});
+ it('does not record a failed migration and can recover on rerun',async()=>{const failureDb=database.client.db(`${databaseName}_failure`);let fail=true;const definition:Migration={version:1,name:'recoverable',checksumSource:'v1',up:vi.fn(async()=>{if(fail){fail=false;throw new Error('planned failure');}await failureDb.collection('proof').insertOne({ok:true});}),down:async()=>{}};const runner=new MigrationRunner(failureDb,[definition]);await expect(runner.up()).rejects.toThrow('planned failure');expect(await failureDb.collection('schema_migrations').countDocuments()).toBe(0);await runner.up();expect(await failureDb.collection('schema_migrations').countDocuments()).toBe(1);await failureDb.dropDatabase();});
+ it('rejects modified checksums',async()=>{const checksumDb=database.client.db(`${databaseName}_checksum`),original:Migration={version:1,name:'stable',checksumSource:'one',up:async()=>{},down:async()=>{}};await new MigrationRunner(checksumDb,[original]).up();await expect(new MigrationRunner(checksumDb,[{...original,checksumSource:'two'}]).up()).rejects.toThrow(/Checksum mismatch/);await checksumDb.dropDatabase();});
+ it('prevents concurrent runners from entering the migration body',async()=>{const lockDb=database.client.db(`${databaseName}_lock`);let release:()=>void=()=>{};const gate=new Promise<void>(resolve=>{release=resolve;});const definition:Migration={version:1,name:'slow',checksumSource:'v1',up:async()=>gate,down:async()=>{}};const first=new MigrationRunner(lockDb,[definition]).up();await vi.waitFor(async()=>expect(await lockDb.collection('schema_migration_lock').countDocuments()).toBe(1));await expect(new MigrationRunner(lockDb,[definition]).up()).rejects.toThrow(/holds the database lock/);release();await first;await lockDb.dropDatabase();});
 });

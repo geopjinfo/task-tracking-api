@@ -1,48 +1,51 @@
-import type { Db,Document } from 'mongodb';
+import { createHash,randomUUID } from 'node:crypto';
+import { MongoServerError,type Collection,type CreateIndexesOptions,type Db,type Document,type Filter,type WithId } from 'mongodb';
 
-export interface MigrationRecord extends Document{
- id:string;
- description:string;
- appliedAt:Date;
+const ledgerName='schema_migrations';
+const lockName='schema_migration_lock';
+const lockId='global';
+const lockLeaseMs=60_000;
+
+export interface MigrationRecord extends Document{version:number;name:string;checksum:string;appliedAt:Date;executionMs:number;}
+interface MigrationLock extends Document{id:string;owner:string;leaseUntil:Date;}
+export interface MigrationContext{readonly database:Db;forEachBatch<T extends Document>(collection:Collection<T>,filter:Filter<T>,batchSize:number,apply:(documents:WithId<T>[])=>Promise<void>):Promise<void>;}
+export interface Migration{readonly version:number;readonly name:string;readonly checksumSource:string;up(context:MigrationContext):Promise<void>;down(context:MigrationContext):Promise<void>;}
+export type MigrationStatus={version:number;name:string;checksum:string;state:'applied'|'pending';appliedAt?:Date};
+
+type IndexKey=Readonly<Record<string,1|-1|'text'>>;
+const indexDefinitions:ReadonlyArray<{collection:string;name:string;key:IndexKey;options?:CreateIndexesOptions}>= [
+ {collection:'users',name:'users_id_unique',key:{id:1},options:{unique:true}},{collection:'users',name:'users_email_unique',key:{emailNormalized:1},options:{unique:true}},
+ {collection:'sessions',name:'sessions_token_unique',key:{tokenHash:1},options:{unique:true}},{collection:'sessions',name:'sessions_family',key:{familyId:1}},{collection:'sessions',name:'sessions_user_active',key:{userId:1,revokedAt:1}},{collection:'sessions',name:'sessions_expiry_ttl',key:{expiresAt:1},options:{expireAfterSeconds:0}},
+ {collection:'projects',name:'projects_id_unique',key:{id:1},options:{unique:true}},{collection:'projects',name:'projects_owner_created',key:{ownerId:1,createdAt:-1}},
+ {collection:'memberships',name:'memberships_project_user_unique',key:{projectId:1,userId:1},options:{unique:true}},{collection:'memberships',name:'memberships_user_created',key:{userId:1,createdAt:-1}},
+ {collection:'invitations',name:'invitations_token_unique',key:{tokenHash:1},options:{unique:true}},{collection:'invitations',name:'invitations_pending_unique',key:{projectId:1,status:1,emailNormalized:1},options:{unique:true,partialFilterExpression:{status:'pending'}}},{collection:'invitations',name:'invitations_expiry_ttl',key:{expiresAt:1},options:{expireAfterSeconds:0,partialFilterExpression:{status:'pending'}}},
+ {collection:'tasks',name:'tasks_id_unique',key:{id:1},options:{unique:true}},{collection:'tasks',name:'tasks_project_created',key:{projectId:1,createdAt:-1,id:-1}},{collection:'tasks',name:'tasks_project_status_created',key:{projectId:1,status:1,createdAt:-1,id:-1}},{collection:'tasks',name:'tasks_project_assignee_created',key:{projectId:1,assigneeId:1,createdAt:-1,id:-1}},{collection:'tasks',name:'tasks_assignee_created',key:{assigneeId:1,createdAt:-1,id:-1}},{collection:'tasks',name:'tasks_project_due',key:{projectId:1,dueDate:1,id:1}},{collection:'tasks',name:'tasks_text',key:{title:'text',description:'text'}},
+ {collection:'comments',name:'comments_id_unique',key:{id:1},options:{unique:true}},{collection:'comments',name:'comments_task_created',key:{taskId:1,createdAt:1,id:1}},
+ {collection:'attachments',name:'attachments_id_unique',key:{id:1},options:{unique:true}},{collection:'attachments',name:'attachments_object_unique',key:{objectKey:1},options:{unique:true}},{collection:'attachments',name:'attachments_task_created',key:{taskId:1,createdAt:1,id:1}},{collection:'attachments',name:'attachments_status_created',key:{status:1,createdAt:1}},
+ {collection:'notifications',name:'notifications_id_unique',key:{id:1},options:{unique:true}},{collection:'notifications',name:'notifications_delivery_unique',key:{deliveryKey:1},options:{unique:true}},{collection:'notifications',name:'notifications_recipient_project_created',key:{recipientId:1,projectId:1,createdAt:-1,id:-1}},{collection:'notifications',name:'notifications_recipient_unread',key:{recipientId:1,projectId:1,readAt:1,createdAt:-1}},
+ {collection:'outbox_events',name:'outbox_id_unique',key:{id:1},options:{unique:true}},{collection:'outbox_events',name:'outbox_claim',key:{status:1,availableAt:1,leaseUntil:1,createdAt:1,id:1}},
+ {collection:'ai_usage',name:'ai_usage_id_unique',key:{id:1},options:{unique:true}},{collection:'ai_usage',name:'ai_usage_user_project_created',key:{userId:1,projectId:1,createdAt:-1}},
+ {collection:'email_deliveries',name:'email_delivery_id_unique',key:{id:1},options:{unique:true}},{collection:'email_deliveries',name:'email_delivery_invitation_unique',key:{invitationId:1,deliveryKind:1},options:{unique:true}},{collection:'email_deliveries',name:'email_delivery_claim',key:{status:1,availableAt:1,leaseUntil:1,createdAt:1,id:1}}
+];
+const validators:ReadonlyArray<{collection:string;required:string[]}>= [
+ {collection:'users',required:['id','emailNormalized','passwordHash','createdAt']},{collection:'projects',required:['id','name','ownerId','status','createdAt','updatedAt']},{collection:'memberships',required:['id','projectId','userId','role','createdAt']},{collection:'tasks',required:['id','projectId','title','description','status','version','createdBy','createdAt','updatedAt']},{collection:'comments',required:['id','taskId','projectId','authorId','body','createdAt','updatedAt']},{collection:'attachments',required:['id','taskId','projectId','uploaderId','objectKey','status','createdAt']},{collection:'notifications',required:['id','deliveryKey','recipientId','projectId','createdAt']},{collection:'outbox_events',required:['id','event','status','attempts','availableAt','createdAt']}
+];
+async function setValidator(database:Db,collection:string,required:string[]):Promise<void>{const validator={$jsonSchema:{bsonType:'object',required}};const exists=await database.listCollections({name:collection},{nameOnly:true}).hasNext();if(exists)await database.command({collMod:collection,validator,validationLevel:'moderate',validationAction:'error'});else await database.createCollection(collection,{validator,validationLevel:'moderate',validationAction:'error'});}
+const defaultIndexName=(key:IndexKey):string=>Object.entries(key).map(([field,direction])=>`${field}_${String(direction)}`).join('_');
+const initialSchema:Migration={version:1,name:'initial-schema',checksumSource:JSON.stringify({indexDefinitions,validators}),async up({database}){await Promise.all(validators.map(item=>setValidator(database,item.collection,item.required)));await Promise.all(indexDefinitions.map(item=>database.collection(item.collection).createIndex(item.key,item.options)));},async down({database}){for(const item of [...indexDefinitions].reverse())await database.collection(item.collection).dropIndex(defaultIndexName(item.key)).catch((error:unknown)=>{if(!(error instanceof MongoServerError)||error.code!==27)throw error;});for(const item of validators)await database.command({collMod:item.collection,validator:{},validationLevel:'off'}).catch((error:unknown)=>{if(!(error instanceof MongoServerError)||error.code!==26)throw error;});}};
+export const migrations:readonly Migration[]=[initialSchema];
+const checksum=(migration:Migration):string=>createHash('sha256').update(`${String(migration.version)}:${migration.name}:${migration.checksumSource}`).digest('hex');
+function validateDefinitions(definitions:readonly Migration[]):void{let previous=0;for(const migration of definitions){if(!Number.isInteger(migration.version)||migration.version<=previous)throw new Error('Migrations must have unique, positive, ascending versions');previous=migration.version;}}
+const context=(database:Db):MigrationContext=>({database,async forEachBatch<T extends Document>(collection:Collection<T>,filter:Filter<T>,batchSize:number,apply:(documents:WithId<T>[])=>Promise<void>):Promise<void>{if(!Number.isInteger(batchSize)||batchSize<1)throw new Error('Migration batch size must be a positive integer');const cursor=collection.find(filter).sort({_id:1}).batchSize(batchSize);let batch:WithId<T>[]=[];for await(const document of cursor){batch.push(document);if(batch.length===batchSize){await apply(batch);batch=[];}}if(batch.length>0)await apply(batch);}});
+export class MigrationRunner{
+ constructor(private readonly database:Db,private readonly definitions:readonly Migration[]=migrations){validateDefinitions(definitions);}
+ async status():Promise<MigrationStatus[]>{const records=await this.ledger().find().sort({version:1}).toArray();this.assertKnownRecords(records);const byVersion=new Map(records.map(record=>[record.version,record]));return this.definitions.map(migration=>{const record=byVersion.get(migration.version);this.assertChecksum(migration,record);return record?{version:migration.version,name:migration.name,checksum:checksum(migration),state:'applied',appliedAt:record.appliedAt}:{version:migration.version,name:migration.name,checksum:checksum(migration),state:'pending'};});}
+ async up():Promise<MigrationStatus[]>{return this.withLock(async()=>{await this.prepareLedger();const records=await this.ledger().find().sort({version:1}).toArray();this.assertKnownRecords(records);const applied=new Map(records.map(record=>[record.version,record]));for(const migration of this.definitions){const record=applied.get(migration.version);this.assertChecksum(migration,record);if(record)continue;const started=Date.now();await migration.up(context(this.database));await this.ledger().insertOne({version:migration.version,name:migration.name,checksum:checksum(migration),appliedAt:new Date(),executionMs:Date.now()-started});}return this.status();});}
+ async down():Promise<MigrationStatus[]>{return this.withLock(async()=>{await this.prepareLedger();const record=await this.ledger().find().sort({version:-1}).limit(1).next();if(!record)return this.status();const migration=this.definitions.find(item=>item.version===record.version);if(!migration)throw new Error(`Applied migration ${String(record.version)} is not present in this build`);this.assertChecksum(migration,record);await migration.down(context(this.database));await this.ledger().deleteOne({version:record.version,checksum:record.checksum});return this.status();});}
+ private ledger():Collection<MigrationRecord>{return this.database.collection<MigrationRecord>(ledgerName);}
+ private async prepareLedger():Promise<void>{await this.ledger().createIndex({version:1},{name:'schema_migrations_version_unique',unique:true});}
+ private assertKnownRecords(records:MigrationRecord[]):void{for(const record of records)if(!this.definitions.some(item=>item.version===record.version))throw new Error(`Applied migration ${String(record.version)} is not present in this build`);}
+ private assertChecksum(migration:Migration,record?:MigrationRecord):void{if(record&&record.checksum!==checksum(migration))throw new Error(`Checksum mismatch for migration ${String(migration.version)} (${migration.name})`);}
+ private async withLock<T>(work:()=>Promise<T>):Promise<T>{const owner=randomUUID(),locks=this.database.collection<MigrationLock>(lockName),now=new Date(),leaseUntil=new Date(now.getTime()+lockLeaseMs);await locks.createIndex({id:1},{name:'schema_migration_lock_unique',unique:true});let acquired=false;try{const result=await locks.findOneAndUpdate({id:lockId,$or:[{leaseUntil:{$lte:now}},{owner}]},{$set:{id:lockId,owner,leaseUntil}},{upsert:true,returnDocument:'after'});acquired=result?.owner===owner;}catch(error:unknown){if(!String(error).includes('E11000'))throw error;}if(!acquired)throw new Error('Another migration process holds the database lock');let renewalFailure:Error|undefined;const renewal=setInterval(()=>{void locks.updateOne({id:lockId,owner},{$set:{leaseUntil:new Date(Date.now()+lockLeaseMs)}}).then(result=>{if(result.modifiedCount!==1)renewalFailure=new Error('Database migration lock was lost');}).catch((error:unknown)=>{renewalFailure=new Error('Database migration lock renewal failed',{cause:error});});},lockLeaseMs/3);renewal.unref();try{const result=await work();if(renewalFailure)throw renewalFailure;return result;}finally{clearInterval(renewal);await locks.deleteOne({id:lockId,owner});}}
 }
-
-interface Migration{
- id:string;
- description:string;
- up:(database:Db)=>Promise<void>;
-}
-
-const initialIndexes:Migration={
- id:'001-initial-indexes',
- description:'Create application uniqueness, query, worker, and TTL indexes',
- up:async database=>{await Promise.all([
-  database.collection('users').createIndex({id:1},{unique:true}),database.collection('users').createIndex({emailNormalized:1},{unique:true}),
-  database.collection('sessions').createIndex({tokenHash:1},{unique:true}),database.collection('sessions').createIndex({familyId:1}),database.collection('sessions').createIndex({userId:1,revokedAt:1}),database.collection('sessions').createIndex({expiresAt:1},{expireAfterSeconds:0}),
-  database.collection('projects').createIndex({id:1},{unique:true}),database.collection('projects').createIndex({ownerId:1,createdAt:-1}),
-  database.collection('memberships').createIndex({projectId:1,userId:1},{unique:true}),database.collection('memberships').createIndex({userId:1,createdAt:-1}),
-  database.collection('invitations').createIndex({tokenHash:1},{unique:true}),database.collection('invitations').createIndex({projectId:1,status:1,emailNormalized:1},{unique:true,partialFilterExpression:{status:'pending'}}),database.collection('invitations').createIndex({expiresAt:1},{expireAfterSeconds:0,partialFilterExpression:{status:'pending'}}),
-  database.collection('tasks').createIndex({id:1},{unique:true}),database.collection('tasks').createIndex({projectId:1,createdAt:-1,id:-1}),database.collection('tasks').createIndex({projectId:1,status:1,createdAt:-1,id:-1}),database.collection('tasks').createIndex({projectId:1,assigneeId:1,createdAt:-1,id:-1}),database.collection('tasks').createIndex({assigneeId:1,createdAt:-1,id:-1}),database.collection('tasks').createIndex({projectId:1,dueDate:1,id:1}),database.collection('tasks').createIndex({title:'text',description:'text'}),
-  database.collection('comments').createIndex({id:1},{unique:true}),database.collection('comments').createIndex({taskId:1,createdAt:1,id:1}),database.collection('attachments').createIndex({id:1},{unique:true}),database.collection('attachments').createIndex({objectKey:1},{unique:true}),database.collection('attachments').createIndex({taskId:1,createdAt:1,id:1}),database.collection('attachments').createIndex({status:1,createdAt:1}),
-  database.collection('notifications').createIndex({id:1},{unique:true}),database.collection('notifications').createIndex({deliveryKey:1},{unique:true}),database.collection('notifications').createIndex({recipientId:1,projectId:1,createdAt:-1,id:-1}),database.collection('notifications').createIndex({recipientId:1,projectId:1,readAt:1,createdAt:-1}),
-  database.collection('outbox_events').createIndex({id:1},{unique:true}),database.collection('outbox_events').createIndex({status:1,availableAt:1,leaseUntil:1,createdAt:1,id:1}),
-  database.collection('ai_usage').createIndex({id:1},{unique:true}),database.collection('ai_usage').createIndex({userId:1,projectId:1,createdAt:-1}),
-  database.collection('email_deliveries').createIndex({id:1},{unique:true}),database.collection('email_deliveries').createIndex({invitationId:1,deliveryKind:1},{unique:true}),database.collection('email_deliveries').createIndex({status:1,availableAt:1,leaseUntil:1,createdAt:1,id:1})
- ])}
-};
-
-export const migrations:readonly Migration[]=[initialIndexes];
-
-export async function runMigrations(database:Db):Promise<void>{
- const ledger=database.collection<MigrationRecord>('_schema_migrations');
- await ledger.createIndex({id:1},{unique:true});
- const applied=new Set((await ledger.find({},{projection:{id:1}}).toArray()).map(record=>record.id));
- for(const migration of migrations){
-  if(applied.has(migration.id))continue;
-  await migration.up(database);
-  await ledger.updateOne(
-   {id:migration.id},
-   {$setOnInsert:{id:migration.id,description:migration.description,appliedAt:new Date()}},
-   {upsert:true}
-  );
- }
-}
+export async function runMigrations(database:Db):Promise<void>{await new MigrationRunner(database).up();}

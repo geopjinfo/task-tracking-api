@@ -19,7 +19,7 @@ jobs:
         run: docker run -d --name task-ci-redis --network task-tracking-ci -p 6379:6379 redis:8-alpine
       - name: Start MinIO
         run: |
-          if ! output=$(docker run -d --name task-ci-minio --network task-tracking-ci -p 9000:9000 -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin minio/minio:RELEASE.2025-09-07T16-13-09Z server /data 2>&1); then
+          if ! output=$(docker run -d --name task-ci-minio --network task-tracking-ci -p 9000:9000 -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin ghcr.io/coollabsio/minio@sha256:69b55a1c1c5dc285ce04db96689f5b2102317fc77a50680a1874ca6efd1c87f9 server /data 2>&1); then
             echo "::error title=MinIO startup failed::$output"
             exit 1
           fi
@@ -38,8 +38,14 @@ jobs:
       - name: Wait for Mailpit
         run: |
           for attempt in {1..30}; do curl --fail --silent http://localhost:8025/api/v1/info && break; sleep 2; done
-      - run: npm run check
       - run: npm run build
+      - name: Apply and verify database migrations
+        env:
+          MONGODB_URI: mongodb://localhost:27017/task_tracking?replicaSet=rs0&directConnection=true
+        run: |
+          npm run migrate
+          npm run migrate:status | grep -q "001 applied initial-schema"
+      - run: npm run check
       - run: npm run test:coverage
       - run: npm audit --omit=dev --audit-level=critical
       - uses: gitleaks/gitleaks-action@v2

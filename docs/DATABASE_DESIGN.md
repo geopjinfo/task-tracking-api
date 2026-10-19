@@ -10,7 +10,7 @@ References are validated in application services because MongoDB has no foreign 
 
 ## Schema migration policy
 
-Versioned migrations run in lexical order before API or worker readiness and record successful application in `_schema_migrations`. Every migration must be safe to rerun because API and worker processes can start concurrently. The initial `001-initial-indexes` migration creates all required additive indexes. Destructive collection or field changes require an expand-and-contract release, a tested data backfill, and a restore or forward-fix plan; they must not be hidden inside ordinary application startup.
+Strongly typed, numerically versioned migrations run in ascending order before API or worker readiness and record version, name, SHA-256 checksum, application time, and execution duration in `schema_migrations`. A database-backed lease prevents concurrent runners. An applied checksum mismatch fails startup; a failed `up` is never recorded. The initial `001 initial-schema` migration creates collection validators and required indexes. Migration code exposes a stable `_id`-ordered batch helper for bounded data backfills. Development seed data is separate and this release requires none. Destructive collection or field changes require an expand-and-contract release, a tested batched backfill, and a restore or forward-fix plan; they must not be hidden inside ordinary application startup.
 
 ## Relationship model
 

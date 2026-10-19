@@ -26,6 +26,18 @@ This is the single public decision register. Each accepted record states the pro
 
 **Consequences:** Mappers and indexes are explicit and require more code. MongoDB remains the durable source of truth. A SQL migration replaces adapters and database-specific queries while contract tests remain reusable.
 
+## Versioned MongoDB migrations
+
+**Status:** Accepted
+
+**Context:** Schema validation, indexes, and future data backfills must be reproducible across fresh databases and rolling deployments.
+
+**Alternatives:** Create indexes opportunistically at startup; use untracked deployment scripts; use a versioned runner with integrity and concurrency controls.
+
+**Decision and rationale:** Use ordered TypeScript migrations with explicit `up` and `down`, SHA-256 checksums, a `schema_migrations` ledger, and a database-backed lease. Startup applies pending migrations idempotently; deployment and CI also run the explicit command. Bounded data migrations iterate by stable `_id`, and seed data remains separate.
+
+**Consequences:** Modified applied migrations fail fast rather than drifting silently. Failed migrations are not recorded, concurrent runners are rejected, and operational rollback remains a deliberate action rather than an automatic startup behavior.
+
 ## Short access tokens and rotating refresh sessions
 
 **Status:** Accepted

@@ -4,6 +4,8 @@
 
 A release consists of one immutable application image used by both the HTTP API and background worker, the validated environment contract, and the MongoDB index bootstrap performed during startup. MongoDB must be a replica set. Redis is disposable coordination state. Attachment storage must be private and S3-compatible. SMTP and OpenRouter credentials are external secrets.
 
+The local MinIO server/client package is pinned by OCI digest from GHCR because the former Docker Hub release tag is no longer pullable. Treat the digest as a reviewed dependency and update it only through the normal dependency review and integration-test process; production may use any private S3-compatible service through the same port.
+
 Before deployment, run:
 
 ```sh
@@ -32,7 +34,7 @@ Back up MongoDB with a replica-set-consistent snapshot or `mongodump` using depl
 
 ## Rollback
 
-Applied migration IDs and timestamps are recorded in `_schema_migrations`. Migration `001-initial-indexes` is additive and idempotent; there is no destructive migration in this release. To roll back, stop new worker claims, route traffic to the previous immutable image, start its compatible worker, and verify readiness plus core flows. Do not delete collections or indexes during an incident. If a future release introduces a destructive migration, it must ship a separately tested forward-fix and restore plan before deployment.
+Applied versions, checksums, timestamps, and durations are recorded in `schema_migrations`; `schema_migration_lock` provides a renewable-scope execution lease. Migration `001 initial-schema` is additive and idempotent. CI applies it against a fresh replica set and verifies status before tests. To roll back application code, stop new worker claims, route traffic to the previous immutable image, start its compatible worker, and verify readiness plus core flows. Use `npm run migrate:down` only as a deliberate schema rollback after backup and compatibility review. If a future release introduces destructive change, it must ship a separately tested batched backfill, forward-fix, and restore plan before deployment.
 
 Pending outbox and email jobs remain in MongoDB during a rollback. Leases expire after 30 seconds and can be reclaimed by a compatible worker. Failed jobs retain stable error codes for investigation. Redis loss only affects limits and live fan-out; notification history remains durable.
 
