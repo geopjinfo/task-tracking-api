@@ -2,7 +2,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import cookieParser from 'cookie-parser'; import cors from 'cors'; import express, { type Request } from 'express';
 import nodemailer from 'nodemailer'; import pino from 'pino'; import { pinoHttp } from 'pino-http'; import { z } from 'zod';
 import { S3Client, PutObjectCommand, GetObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3'; import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-type RedisCounter={incr(key:string):Promise<number>;expire(key:string,seconds:number):Promise<boolean>};
+type RedisCounter={incr(key:string):Promise<number>;expire(key:string,seconds:number):Promise<number>};
 import type { Config } from './config.js'; import type { Database } from './database.js'; import { AuthService, authMiddleware, type UserDoc } from './auth.js';
 import { AppError, asyncRoute, contextMiddleware, errorHandler, newId, notFound } from './shared.js'; import { requireRole, type MembershipDoc, type Role } from './policies.js';
 
