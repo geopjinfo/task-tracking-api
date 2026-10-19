@@ -34,7 +34,7 @@ This is the single public decision register. Each accepted record states the pro
 
 **Alternatives:** Long-lived bearer JWT; opaque server session only; short JWT plus persistent rotating refresh session.
 
-**Decision and rationale:** Issue 15-minute signed access JWTs and opaque refresh tokens stored only as hashes. Rotate refresh tokens and revoke the family on reuse. Use an HttpOnly, SameSite cookie and Secure in HTTPS environments.
+**Decision and rationale:** Issue 15-minute signed access JWTs and opaque refresh tokens stored only as hashes. Rotate refresh tokens atomically and revoke the family on reuse. Use an HttpOnly, SameSite cookie and Secure in HTTPS environments. Refresh and cookie logout require an exact `Origin` match to `PUBLIC_URL`; logout-all is bearer-authenticated and revokes every refresh session for the user.
 
 **Consequences:** Refresh/logout need persistence and a CSRF control. JWT verification checks issuer, audience, algorithm, expiry, subject, and session claim. Access tokens remain valid until their short expiry unless an additional denylist is introduced.
 

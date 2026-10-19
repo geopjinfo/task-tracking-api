@@ -19,7 +19,7 @@ Bearer access tokens protect application routes. Refresh and logout use the HTTP
 
 ## Authentication and cookies
 
-Registration/login return an access token and set `refresh_token` as HttpOnly, SameSite=Lax, path `/api/v1/auth`; production sets Secure. Refresh and logout require the cookie and the configured CSRF evidence. Protected endpoints use `Authorization: Bearer <access-token>`. Persistent access/refresh tokens are never accepted in URLs.
+Registration/login return an access token and set `refresh_token` as HttpOnly, SameSite=Lax, path `/api/v1/auth`; production sets Secure. Refresh and cookie-based logout require an `Origin` header whose origin exactly matches `PUBLIC_URL`; this is the CSRF check in addition to SameSite cookies. Logout-all uses the bearer access token and revokes every refresh session owned by that user. Protected endpoints use `Authorization: Bearer <access-token>`. Persistent access/refresh tokens are never accepted in URLs.
 
 ## Error taxonomy
 
@@ -46,6 +46,7 @@ Errors never contain stack traces, database messages, provider bodies, credentia
 | POST | `/auth/login` | AUTH-02 | public + rate limit |
 | POST | `/auth/refresh` | AUTH-03 | refresh cookie + CSRF + rate limit |
 | POST | `/auth/logout` | AUTH-04 | refresh cookie + CSRF |
+| POST | `/auth/logout-all` | AUTH-04 | bearer token; revoke all refresh sessions |
 | GET/PATCH | `/users/me` | USER-01 | authenticated user |
 | POST/GET | `/projects` | PROJ-01/02 | authenticated user |
 | GET/PATCH | `/projects/{projectId}` | PROJ-02/03 | member / owner-admin |
