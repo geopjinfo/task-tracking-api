@@ -54,6 +54,9 @@ paths:
   /projects/{projectId}/members:
     parameters: [{ $ref: '#/components/parameters/ProjectId' }]
     get: { security: [{ bearerAuth: [] }], responses: { '200': { description: Project members }, '404': { $ref: '#/components/responses/NotFound' } } }
+  /projects/{projectId}/members/{userId}:
+    parameters: [{ $ref: '#/components/parameters/ProjectId' }, { in: path, name: userId, required: true, schema: { type: string, format: uuid } }]
+    delete: { security: [{ bearerAuth: [] }], responses: { '204': { description: Member removed and assigned tasks unassigned }, '404': { $ref: '#/components/responses/NotFound' }, '409': { description: Project owner is protected } } }
   /projects/{projectId}/invitations:
     parameters: [{ $ref: '#/components/parameters/ProjectId' }]
     post:
@@ -63,6 +66,9 @@ paths:
   /invitations/{token}/accept:
     parameters: [{ in: path, name: token, required: true, schema: { type: string, minLength: 20, maxLength: 200 } }]
     post: { security: [{ bearerAuth: [] }], responses: { '200': { description: Invitation accepted or previously accepted }, '404': { $ref: '#/components/responses/NotFound' }, '410': { description: Invitation expired } } }
+  /invitations/{token}/reject:
+    parameters: [{ in: path, name: token, required: true, schema: { type: string, minLength: 20, maxLength: 200 } }]
+    post: { security: [{ bearerAuth: [] }], responses: { '200': { description: Invitation rejected or previously rejected }, '404': { $ref: '#/components/responses/NotFound' }, '410': { description: Invitation expired } } }
   /tasks/assigned-to-me:
     get:
       security: [{ bearerAuth: [] }]

@@ -53,6 +53,8 @@ Errors never contain stack traces, database messages, provider bodies, credentia
 | GET | `/projects/{projectId}/members` | MEM-03 | member |
 | POST | `/projects/{projectId}/invitations` | MEM-01 | owner/admin |
 | POST | `/invitations/{token}/accept` | MEM-02 | authenticated matching email |
+| POST | `/invitations/{token}/reject` | MEM-03 | authenticated matching email |
+| DELETE | `/projects/{projectId}/members/{userId}` | MEM-04/05 | self, owner, or authorized admin; owner protected |
 | POST/GET | `/projects/{projectId}/tasks` | TASK-01/05 | member |
 | GET | `/tasks/assigned-to-me` | TASK-05 | authenticated user |
 | GET/PATCH/DELETE | `/tasks/{taskId}` | TASK-01/02 | member / owner-admin delete |

@@ -185,6 +185,8 @@ Invitation creation requires owner/admin, normalizes email, creates a random tok
 
 Invitation acceptance loads by hash, compares normalized authenticated email, checks pending state and expiry, then transactionally upserts membership and transitions invitation to accepted. A matching already-accepted invitation returns its project without duplicating membership; wrong-user and unknown tokens use concealed errors.
 
+Invitation rejection applies the same identity, state, and expiry checks and is idempotent after the first rejection. Removing a non-owner membership and clearing that user's task assignments occur in one transaction. Task versions increment when an assignee is cleared so concurrent clients cannot overwrite the removal. Owners cannot be removed; administrators cannot remove another administrator, while any non-owner may leave by removing their own membership.
+
 ## Task sequences
 
 ### Create and assign

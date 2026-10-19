@@ -1,0 +1,4 @@
+import { Router } from 'express';
+import { asyncRoute } from '../../../../shared/http/async-route.js';
+import type { ProjectController } from './project.controller.js';
+export function projectRoutes(controller:ProjectController):Router{const router=Router();router.post('/projects',asyncRoute(controller.create));router.get('/projects',asyncRoute(controller.list));router.get('/projects/:projectId',asyncRoute(controller.get));router.patch('/projects/:projectId',asyncRoute(controller.update));router.get('/projects/:projectId/members',asyncRoute(controller.members));router.delete('/projects/:projectId/members/:userId',asyncRoute(controller.removeMember));router.post('/projects/:projectId/invitations',asyncRoute(controller.invite));router.post('/invitations/:token/accept',asyncRoute(controller.accept));router.post('/invitations/:token/reject',asyncRoute(controller.reject));return router;}
