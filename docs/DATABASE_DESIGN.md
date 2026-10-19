@@ -1,5 +1,7 @@
 # Database design
 
+This design applies the persistence choices recorded in `DECISIONS.md` and the consistency boundaries defined by `HLD.md` and `LLD.md`.
+
 All IDs are UUIDv7 strings and timestamps are UTC dates. Collections are `users`, `sessions`, `projects`, `memberships`, `invitations`, `tasks`, `comments`, `attachments`, `notifications`, and `outbox_events`.
 
 Unique indexes enforce normalized user email, refresh token hash, invitation token hash, `(projectId,userId)` membership and notification delivery key. Task listing uses `(projectId,createdAt desc,id desc)` and a text index on title and description. Notification inboxes use `(recipientId,createdAt desc,id desc)`; workers claim `(status,availableAt,leaseUntil)`.
