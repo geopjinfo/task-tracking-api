@@ -1,0 +1,3 @@
+import { describe,expect,it } from 'vitest'; import { loadConfig } from '../src/config.js';
+const valid={MONGODB_URI:'mongodb://localhost/test',REDIS_URL:'redis://localhost',JWT_SECRET:'x'.repeat(32),S3_ENDPOINT:'http://localhost:9000',S3_BUCKET:'attachments',S3_ACCESS_KEY:'key',S3_SECRET_KEY:'secret'};
+describe('configuration',()=>{it('applies secure bounded defaults',()=>{const config=loadConfig(valid);expect(config.ACCESS_TOKEN_TTL_SECONDS).toBe(900);expect(config.SMTP_HOST).toBe('mailpit');expect(config.OTEL_ENABLED).toBe(false);});it('rejects a weak signing secret',()=>{expect(()=>loadConfig({...valid,JWT_SECRET:'short'})).toThrow();});});
