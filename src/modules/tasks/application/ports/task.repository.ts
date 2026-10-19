@@ -2,9 +2,12 @@ import type { Task, TaskStatus } from '../../domain/task.entity.js';
 
 export type TaskQuery = {
   projectId?: string;
+  projectIds?: string[];
   assigneeId?: string;
   status?: TaskStatus;
   search?: string;
+  dueFrom?: Date;
+  dueTo?: Date;
   cursor?: string;
   limit: number;
   sort: 'createdAt' | 'dueDate';

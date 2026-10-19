@@ -139,6 +139,8 @@ Cursor values encode the stable sort field and `id`, are opaque to clients, and 
 
 Task mutations match `{id,version}` and atomically increment `version`. Zero modified documents means either absence/authorization concealment or a version conflict, resolved in the service without a blind retry.
 
+Task completion sets `completedAt`; moving a completed task back to in-progress clears it. Due dates must be future instants when set and may be explicitly cleared. Task-list cursors contain the selected sort value and ID, and apply a matching compound boundary rather than comparing IDs alone.
+
 ## Transactions
 
 | Workflow | Atomic records |

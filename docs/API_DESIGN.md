@@ -76,7 +76,7 @@ Invitation email is an asynchronous consequence of invitation creation, not a se
 
 ## Filtering and sorting
 
-Project task lists accept `status`, `assigneeId`, `search`, `sort=createdAt|dueDate`, `order=asc|desc`, `limit`, and `cursor`. Text search uses MongoDB text semantics, not arbitrary substring matching. Unsupported text-relevance/sort combinations are rejected rather than silently changing meaning. Assigned-to-me fixes the assignee to the authenticated user.
+Project task lists accept `status`, `assigneeId`, `search`, `dueFrom`, `dueTo`, `sort=createdAt|dueDate`, `order=asc|desc`, `limit`, and `cursor`. Text search uses MongoDB text semantics, not arbitrary substring matching. Cursors encode the selected sort value plus task ID so equal timestamps remain stable. Assigned-to-me fixes the assignee to the authenticated user and additionally limits results to projects where that user is currently a member.
 
 ## Attachment contract
 

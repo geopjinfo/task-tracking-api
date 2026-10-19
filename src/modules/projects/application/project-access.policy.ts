@@ -8,4 +8,5 @@ export class ProjectAccessPolicy{
  async require(projectId:string,userId:string,minimum:Role='member'):Promise<Membership>{const membership=await this.repository.findMembership(projectId,userId);if(!membership||rank[membership.role]<rank[minimum])throw new AppError(404,'RESOURCE_NOT_FOUND','Resource was not found');return membership;}
  async requireMember(projectId:string,userId:string):Promise<void>{await this.require(projectId,userId);}
  async requireAdmin(projectId:string,userId:string):Promise<void>{await this.require(projectId,userId,'admin');}
+ async visibleProjectIds(userId:string):Promise<string[]>{return (await this.repository.listForUser(userId)).map(project=>project.id);}
 }

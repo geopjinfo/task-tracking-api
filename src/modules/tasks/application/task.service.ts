@@ -6,6 +6,7 @@ import type { TaskPage, TaskQuery, TaskRepository } from './ports/task.repositor
 export interface TaskAccessPolicy {
   requireMember(projectId: string, userId: string): Promise<void>;
   requireAdmin(projectId: string, userId: string): Promise<void>;
+  visibleProjectIds(userId:string):Promise<string[]>;
 }
 
 export class TaskService {
@@ -28,10 +29,11 @@ export class TaskService {
 
   async search(query: TaskQuery, actorId: string): Promise<TaskPage> {
     if (query.projectId) await this.access.requireMember(query.projectId, actorId);
+    else query.projectIds=await this.access.visibleProjectIds(actorId);
     return this.repository.search(query);
   }
 
-  async update(id: string, actorId: string, expectedVersion: number, changes: { title?: string; description?: string; dueDate?: Date }): Promise<Task> {
+  async update(id: string, actorId: string, expectedVersion: number, changes: { title?: string; description?: string; dueDate?: Date|null }): Promise<Task> {
     const task = await this.get(id, actorId);
     task.update(changes);
     await this.persist(task, expectedVersion);
@@ -68,6 +70,6 @@ export class TaskService {
   }
 
   private async persist(task: Task, version: number): Promise<void> {
-    if (!(await this.repository.update(task, version))) throw new AppError(409, 'VERSION_CONFLICT', 'Task was changed by another request');
+    if (!(await this.repository.update(task, version))) throw new AppError(409, 'VERSION_CONFLICT', 'Task was changed by another request');task.markPersisted(version+1);
   }
 }
