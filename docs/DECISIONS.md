@@ -86,6 +86,16 @@ This is the single public decision register. Each accepted record states the pro
 
 **Consequences:** Streams use heartbeats, connection caps, teardown, and user-specific Redis channels. SSE has no replay guarantee; clients fetch missed durable notifications after reconnect. WebSockets remain deferred.
 
+## Caddy is the production ingress
+
+**Status:** Accepted.
+
+**Decision and rationale:** Use Caddy as the only public reverse proxy in the production Compose topology. It terminates HTTPS, manages certificates, preserves streaming for SSE, and forwards traffic to the private Express service. Express trusts one proxy hop.
+
+**Alternatives:** Expose Express directly; Nginx; Traefik; an additional API gateway.
+
+**Consequences:** Only ports 80 and 443 are public. Stateful services and application containers remain private. Public certificate validation requires a real DNS name and reachable server, while routing and SSE can be tested locally over HTTP. No second proxy or gateway is introduced.
+
 ## Provider ports and explicit AI approval
 
 **Status:** Accepted

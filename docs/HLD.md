@@ -43,7 +43,8 @@ The client and all external provider responses are untrusted. MongoDB is authori
 
 ```mermaid
 flowchart TB
-    Ingress[HTTPS ingress]
+    Client[API client]
+    Ingress[Caddy HTTPS ingress]
 
     subgraph Runtime[Application runtime]
         API[Express API replicas]
@@ -67,7 +68,8 @@ flowchart TB
         Collector --> Backends
     end
 
-    Ingress --> API
+    Client -->|HTTPS REST and SSE| Ingress
+    Ingress -->|trusted private HTTP| API
     API --> Mongo
     API --> Redis
     API --> S3
@@ -79,7 +81,7 @@ flowchart TB
     Worker -. traces .-> Collector
 ```
 
-Production uses HTTPS ingress, API replica(s), a worker, MongoDB replica set, Redis, S3-compatible storage, and outbound HTTPS/SMTP. Local Compose provides API, MongoDB replica set, Redis, MinIO, and Mailpit. The optional `observability` profile adds an OTLP collector, Tempo, Loki, Prometheus, and Grafana. Normal application startup does not require that profile.
+Production uses Caddy as its only public ingress. Caddy terminates HTTPS, manages certificates, forwards trusted proxy headers, and streams REST and SSE traffic to the API without buffering. API replica(s), the worker, MongoDB replica set, Redis, S3-compatible storage, and SMTP remain private. Express trusts exactly one proxy hop in this topology. Local Compose provides API, MongoDB replica set, Redis, MinIO, and Mailpit without requiring Caddy. The optional `observability` profile adds an OTLP collector, Tempo, Loki, Prometheus, and Grafana. Normal application startup does not require that profile.
 
 The API and worker may share one process locally. Multiple API replicas use Redis Pub/Sub for live fan-out but never rely on it for durability.
 

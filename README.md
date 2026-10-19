@@ -10,7 +10,8 @@ The application is a modular monolith. Controllers validate HTTP input, applicat
 
 ```mermaid
 flowchart LR
-    Client[API client] -->|HTTP / JSON| API[Express API]
+    Client[API client] -->|HTTPS / SSE| Caddy[Caddy reverse proxy]
+    Caddy -->|trusted internal HTTP| API[Express API]
     API --> Mongo[(MongoDB)]
     API --> Redis[(Redis)]
     API --> MinIO[(MinIO)]
@@ -30,6 +31,8 @@ flowchart LR
 ```
 
 MongoDB, Redis, MinIO, the API, worker, and Mailpit run in the local Compose environment. OpenRouter is an outbound HTTPS integration, not another locally hosted service. The optional observability profile adds the OpenTelemetry collector, Tempo, Loki, Promtail, Prometheus, and Grafana.
+
+Caddy is the only public entry point in the production Compose overlay. It terminates TLS, forwards REST traffic, and streams SSE without response buffering. MongoDB, Redis, MinIO, Mailpit, the API container, and the worker remain on the private Compose network.
 
 Design details are in [`docs/HLD.md`](docs/HLD.md), [`docs/LLD.md`](docs/LLD.md), [`docs/DATABASE_DESIGN.md`](docs/DATABASE_DESIGN.md), and the consolidated [`docs/DECISIONS.md`](docs/DECISIONS.md).
 
@@ -54,6 +57,8 @@ docker compose --profile observability up --build
 ```
 
 It adds an OpenTelemetry collector, Tempo, Loki, Prometheus, and Grafana without making them application dependencies.
+
+For a public deployment, point the domain's A/AAAA record at the server, allow inbound TCP 80/443 and UDP 443, then run `docker compose -f compose.yaml -f compose.prod.yaml up -d --build`. Set `DOMAIN` to the API hostname; Caddy obtains and renews its certificate automatically. See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for verification steps.
 
 Set `OTEL_ENABLED=true` before starting the profile to export application traces. Promtail ships container stdout logs asynchronously to Loki. Grafana at `http://localhost:3001` is preconfigured with Loki, Tempo, and Prometheus data sources. MongoDB remains the only source of truth for business state; loss of telemetry does not affect requests or delivery jobs.
 

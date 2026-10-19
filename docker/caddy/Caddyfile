@@ -1,0 +1,9 @@
+{$CADDY_SITE_ADDRESS} {
+	encode zstd gzip
+	request_body {
+		max_size 2MB
+	}
+	reverse_proxy api:3000 {
+		flush_interval -1
+	}
+}

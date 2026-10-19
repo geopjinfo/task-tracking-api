@@ -58,6 +58,11 @@ jobs:
       - run: npm audit --omit=dev --audit-level=critical
       - uses: gitleaks/gitleaks-action@v2
       - run: docker compose config --quiet
+      - name: Validate production Caddy topology
+        env:
+          DOMAIN: api.example.test
+          JWT_SECRET: ci-production-compose-secret-32-characters
+        run: docker compose -f compose.yaml -f compose.prod.yaml config --quiet
       - name: Stop integration dependencies
         if: always()
         run: |

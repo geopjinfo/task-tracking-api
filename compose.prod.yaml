@@ -1,0 +1,41 @@
+services:
+  caddy:
+    image: caddy:2.10.2-alpine
+    restart: unless-stopped
+    environment:
+      CADDY_SITE_ADDRESS: "${CADDY_SITE_ADDRESS:-https://${DOMAIN:?Set DOMAIN to the public API hostname}}"
+    ports: ["80:80", "443:443", "443:443/udp"]
+    volumes:
+      - ./docker/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      api: { condition: service_healthy }
+  api:
+    ports: !reset []
+    environment:
+      NODE_ENV: production
+      RUN_BACKGROUND_WORKERS: "false"
+      TRUST_PROXY: "1"
+      COOKIE_SECURE: "true"
+      PUBLIC_URL: "https://${DOMAIN:?Set DOMAIN to the public API hostname}"
+      JWT_SECRET: "${JWT_SECRET:?Set JWT_SECRET to a production secret of at least 32 characters}"
+  worker:
+    environment:
+      NODE_ENV: production
+      RUN_BACKGROUND_WORKERS: "true"
+      COOKIE_SECURE: "true"
+      PUBLIC_URL: "https://${DOMAIN:?Set DOMAIN to the public API hostname}"
+      JWT_SECRET: "${JWT_SECRET:?Set JWT_SECRET to a production secret of at least 32 characters}"
+  mongo:
+    ports: !reset []
+  redis:
+    ports: !reset []
+  minio:
+    ports: !reset []
+  mailpit:
+    ports: !reset []
+
+volumes:
+  caddy_data:
+  caddy_config:

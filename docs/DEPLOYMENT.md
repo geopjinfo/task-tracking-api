@@ -28,6 +28,19 @@ Inspect the image user and scan the final image with the deployment platform's v
 5. Confirm `/health/live` and `/health/ready`, then run registration, project, task, attachment, invitation email, notification, and mocked-AI smoke checks.
 6. Add API replicas only after the first instance passes. Workers safely coordinate through leased MongoDB jobs.
 
+## Public HTTPS ingress
+
+Caddy is the only public production service. Create an A and/or AAAA DNS record for the API hostname pointing to the server, allow inbound TCP 80 and 443 plus UDP 443, and keep MongoDB, Redis, MinIO, Mailpit, API, worker, and telemetry ports closed externally. Set `DOMAIN` to that hostname and provide a non-placeholder `JWT_SECRET` of at least 32 characters alongside the other production credentials in `.env`; Compose refuses to render the production overlay when either required value is absent.
+
+```sh
+docker compose -f compose.yaml -f compose.prod.yaml config
+docker compose -f compose.yaml -f compose.prod.yaml up -d --build
+```
+
+Caddy obtains and renews the public certificate automatically. The API uses `TRUST_PROXY=1`, which trusts only the directly connected Caddy hop; do not increase it unless another controlled proxy is added. Caddy caps request bodies at 2 MB, while Express retains its stricter 1 MB JSON limit. `flush_interval -1` disables proxy response buffering for SSE.
+
+After readiness, verify routing, security headers, the SSE connection, and reconnection with `CADDY_BASE_URL=https://api.example.com npm run proxy:smoke`. For a local ingress test without public DNS, set `CADDY_SITE_ADDRESS=:80` and `DOMAIN=localhost`, then use `CADDY_BASE_URL=http://localhost`; this validates routing and streaming but not public certificate issuance.
+
 ## Backup and recovery
 
 Back up MongoDB with a replica-set-consistent snapshot or `mongodump` using deployment-managed credentials. Back up the private object bucket with versioning or provider snapshots. Redis does not require recovery for correctness. Restore into an isolated environment first, check indexes and referential counts, then exercise the end-to-end smoke suite before promoting the restored data.

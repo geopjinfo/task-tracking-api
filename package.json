@@ -17,6 +17,7 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "load:smoke": "node scripts/load-smoke.mjs",
+    "proxy:smoke": "node scripts/caddy-sse-smoke.mjs",
     "check": "npm run typecheck && npm run lint && npm run lint:openapi && npm test"
   },
   "engines": {
