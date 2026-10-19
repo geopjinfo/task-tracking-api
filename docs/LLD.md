@@ -233,11 +233,10 @@ Confirmation is idempotent for an already-ready matching object. It compares act
 
 ```ts
 type DomainEvent =
-  | { type: 'task.assigned'; taskId: string; projectId: string; actorId: string; assigneeId: string }
-  | { type: 'task.reassigned'; taskId: string; projectId: string; actorId: string; from?: string; to: string }
-  | { type: 'task.completed'; taskId: string; projectId: string; actorId: string }
-  | { type: 'task.commented'; taskId: string; projectId: string; actorId: string; commentId: string }
-  | { type: 'project.invited'; projectId: string; actorId: string; invitationId: string };
+  | { type: 'task.assigned'; taskId: string; projectId: string; actorId: string; assigneeId: string; title: string }
+  | { type: 'task.reassigned'; taskId: string; projectId: string; actorId: string; assigneeId: string; title: string }
+  | { type: 'task.completed'; taskId: string; projectId: string; actorId: string; title: string }
+  | { type: 'task.commented'; taskId: string; projectId: string; actorId: string; commentId: string; title: string };
 ```
 
 The worker atomically claims one eligible event by setting `processing`, `leaseUntil`, and incrementing attempts. It recalculates or validates current visibility, deduplicates recipients, excludes actor by default, and upserts notifications with `eventId:recipientId`. It publishes Redis only after durable insertion. Success marks processed. Transient failure applies bounded exponential backoff with jitter; terminal validation failure records a stable error code and failed status. Expired leases can be reclaimed. Shutdown stops new claims and gives current work a bounded drain period.

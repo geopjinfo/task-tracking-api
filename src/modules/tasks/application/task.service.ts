@@ -2,6 +2,7 @@ import { newId } from '../../../shared/ids.js';
 import { AppError } from '../../../shared/errors/app-error.js';
 import { Task, type TaskStatus } from '../domain/task.entity.js';
 import type { TaskPage, TaskQuery, TaskRepository } from './ports/task.repository.js';
+import type { NotificationEvent } from '../../notifications/domain/events.js';
 
 export interface TaskAccessPolicy {
   requireMember(projectId: string, userId: string): Promise<void>;
@@ -17,7 +18,8 @@ export class TaskService {
     if (input.assigneeId) await this.access.requireMember(input.projectId, input.assigneeId);
     const now = new Date();
     const task = Task.create({ id: newId(), projectId: input.projectId, title: input.title, description: input.description, createdBy: input.actorId, createdAt: now, updatedAt: now, ...(input.assigneeId ? { assigneeId: input.assigneeId } : {}), ...(input.dueDate ? { dueDate: input.dueDate } : {}) });
-    await this.repository.insert(task);
+    const event:NotificationEvent|undefined=input.assigneeId?{type:'task.assigned',taskId:task.snapshot().id,projectId:input.projectId,actorId:input.actorId,assigneeId:input.assigneeId,title:task.snapshot().title}:undefined;
+    await this.repository.insert(task,event);
     return task;
   }
 
@@ -43,7 +45,8 @@ export class TaskService {
   async transition(id: string, actorId: string, expectedVersion: number, status: TaskStatus): Promise<Task> {
     const task = await this.get(id, actorId);
     task.transition(status);
-    await this.persist(task, expectedVersion);
+    const snapshot=task.snapshot(),event:NotificationEvent|undefined=status==='done'?{type:'task.completed',taskId:snapshot.id,projectId:snapshot.projectId,actorId,title:snapshot.title}:undefined;
+    await this.persist(task, expectedVersion,event);
     return task;
   }
 
@@ -52,8 +55,8 @@ export class TaskService {
     const projectId = task.snapshot().projectId;
     await this.access.requireAdmin(projectId, actorId);
     if (assigneeId) await this.access.requireMember(projectId, assigneeId);
-    task.assign(assigneeId);
-    await this.persist(task, expectedVersion);
+    const previous=task.snapshot().assigneeId;task.assign(assigneeId);const snapshot=task.snapshot();let event:NotificationEvent|undefined;if(assigneeId&&assigneeId!==previous)event=previous?{type:'task.reassigned',taskId:snapshot.id,projectId,actorId,assigneeId,title:snapshot.title}:{type:'task.assigned',taskId:snapshot.id,projectId,actorId,assigneeId,title:snapshot.title};
+    await this.persist(task, expectedVersion,event);
     return task;
   }
 
@@ -69,7 +72,7 @@ export class TaskService {
     return task;
   }
 
-  private async persist(task: Task, version: number): Promise<void> {
-    if (!(await this.repository.update(task, version))) throw new AppError(409, 'VERSION_CONFLICT', 'Task was changed by another request');task.markPersisted(version+1);
+  private async persist(task: Task, version: number,event?:NotificationEvent): Promise<void> {
+    if (!(await this.repository.update(task, version,event))) throw new AppError(409, 'VERSION_CONFLICT', 'Task was changed by another request');task.markPersisted(version+1);
   }
 }

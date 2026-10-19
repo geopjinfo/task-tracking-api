@@ -1,0 +1,2 @@
+import type { RedisClient } from '../../../../platform/redis/redis.client.js';import type { NotificationPublisher } from '../../application/ports/notification-publisher.js';
+export class RedisNotificationPublisher implements NotificationPublisher{constructor(private readonly redis:RedisClient){}async publish(recipientId:string,message:string):Promise<void>{await this.redis.publish(`notifications:${recipientId}`,message);}}

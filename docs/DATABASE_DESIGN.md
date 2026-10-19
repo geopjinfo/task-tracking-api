@@ -101,15 +101,15 @@ Indexes: unique `{id:1}`, unique `{objectKey:1}`, `{taskId:1,createdAt:1}`, and 
 
 ### `notifications`
 
-Fields: `id`, `recipientId`, optional `actorId`, `projectId`, optional `taskId`, `type`, `title`, `body`, `deliveryKey`, optional `readAt`, `createdAt`.
+Fields: `id`, `eventId`, `recipientId`, `projectId`, `taskId`, `type`, `title`, `body`, `deliveryKey`, optional `readAt`, `createdAt`.
 
-Indexes: unique `{deliveryKey:1}`; `{recipientId:1,createdAt:-1,id:-1}`; `{recipientId:1,readAt:1,createdAt:-1}`. Queries always include authenticated `recipientId`. Current project visibility is rechecked when the event refers to project content.
+Indexes: unique `{id:1}` and `{deliveryKey:1}`; `{recipientId:1,projectId:1,createdAt:-1,id:-1}`; `{recipientId:1,projectId:1,readAt:1,createdAt:-1}`. Queries always include authenticated `recipientId` and currently visible project IDs.
 
 ### `outbox_events`
 
-Fields: `id`, `eventType`, `aggregateId`, `projectId`, `actorId`, `recipientIds`, typed `payload`, `status` (`pending|processing|processed|failed`), `attempts`, `availableAt`, optional `leaseUntil`, `createdAt`, optional `processedAt`, `lastErrorCode`.
+Fields: `id`, typed discriminated `event`, `status` (`pending|processing|processed|failed`), `attempts`, `availableAt`, optional `leaseUntil`, `createdAt`, optional `processedAt`, `lastErrorCode`. The nested event contains bounded task/project/actor identifiers, title, and the type-specific assignee or comment identifier.
 
-Indexes: `{status:1,availableAt:1,leaseUntil:1,createdAt:1}` for atomic claims and `{aggregateId:1,createdAt:1}` for diagnosis. Payloads contain bounded identifiers and display text required for delivery, not credentials or full provider requests.
+Indexes: unique `{id:1}` and `{status:1,availableAt:1,leaseUntil:1,createdAt:1,id:1}` for atomic claims. Event data contains no credentials or provider request bodies.
 
 ### `ai_usage` (durable quota window when enabled)
 
