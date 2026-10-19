@@ -1,4 +1,5 @@
 import type { Invitation,Membership,Project,Role } from '../../domain/project.js';
+import type { InvitationEmailDelivery } from '../../../email/domain/email-delivery.js';
 
 export interface ProjectRepository{
  createWithOwner(project:Project,membership:Membership):Promise<void>;
@@ -7,7 +8,7 @@ export interface ProjectRepository{
  updateProject(id:string,changes:{name?:string;description?:string;updatedAt:Date}):Promise<Project|null>;
  findMembership(projectId:string,userId:string):Promise<Membership|null>;
  listMemberships(projectId:string):Promise<Membership[]>;
- insertInvitation(invitation:Invitation):Promise<boolean>;
+ insertInvitationWithDelivery(invitation:Invitation,delivery:InvitationEmailDelivery):Promise<boolean>;
  findInvitationByTokenHash(tokenHash:string):Promise<Invitation|null>;
  acceptInvitation(invitationId:string,userId:string,role:Exclude<Role,'owner'>,at:Date):Promise<'accepted'|'already-accepted'|'unavailable'>;
  rejectInvitation(invitationId:string,at:Date):Promise<'rejected'|'already-rejected'|'unavailable'>;

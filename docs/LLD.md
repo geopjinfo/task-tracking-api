@@ -255,7 +255,7 @@ Prompt construction separates fixed instruction from serialized untrusted task d
 
 ## Email sequence
 
-Invitation transaction creates a mail delivery intent with an idempotency key. The delivery handler renders a fixed template with escaped values and invokes `MailerPort`. Mailpit is the local adapter. Failure records stable code and retry time without logging token URL or recipient body. Duplicate execution reuses the idempotency key and cannot create another invitation.
+Invitation transaction creates a mail delivery intent with an idempotency key. The delivery handler renders a fixed template with escaped values and invokes `MailerPort`. Mailpit is the local SMTP sandbox. A worker claims jobs with a 30-second lease, makes at most ten attempts with bounded exponential backoff and jitter, and records stable failure codes without logging the token URL or message body. Success removes the raw acceptance URL from the durable intent. Repeated polling cannot resend a completed job; the stable message ID supports downstream deduplication. A crash after SMTP acceptance but before the MongoDB acknowledgement can still produce an at-least-once duplicate, which recipients and production providers must tolerate.
 
 ## Error and retry policy
 

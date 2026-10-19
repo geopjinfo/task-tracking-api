@@ -12,15 +12,19 @@ import { createAttachmentModule } from './modules/attachments/attachment.module.
 import { createNotificationModule } from './modules/notifications/notification.module.js';
 import type { OutboxWorker } from './modules/notifications/application/outbox.worker.js';
 import { createAiModule } from './modules/ai/ai.module.js';
+import { createEmailModule } from './modules/email/email.module.js';
+import type { EmailDeliveryWorker } from './modules/email/application/email-delivery.worker.js';
 import { registerModules } from './app/module-registry.js';
 import { createAuthRateLimiter } from './platform/redis/auth-rate-limiter.js';
 
 
-export function createApp(db:Database,config:Config,redis:RedisClient,injectedLogger?:Logger,registerWorker?:(worker:OutboxWorker)=>void){
+export type BackgroundWorkers={notifications:OutboxWorker;email:EmailDeliveryWorker};
+
+export function createApp(db:Database,config:Config,redis:RedisClient,injectedLogger?:Logger,registerWorkers?:(workers:BackgroundWorkers)=>void){
  const app=express();
  const logger=injectedLogger??pino({level:config.LOG_LEVEL,redact:['req.headers.authorization','req.headers.cookie','password','token','refreshToken','OPENROUTER_API_KEY']});
  app.disable('x-powered-by');app.set('trust proxy',config.TRUST_PROXY);app.use(contextMiddleware,pinoHttp({logger}),cors({origin:config.PUBLIC_URL,credentials:true}),express.json({limit:'1mb'}),cookieParser());
- const api=express.Router(),protectedApi=express.Router(),identity=createIdentityModule(db,config,createAuthRateLimiter(redis)),projects=createProjectModule(db,identity.userRepository),taskModule=createTaskModule(db,projects.access),comments=createCommentModule(db,taskModule.service),attachments=createAttachmentModule(db,config,taskModule.service,projects.access),notifications=createNotificationModule(db,redis,projects.access),ai=createAiModule(db,redis,config,projects.access,taskModule.service,comments.service);registerWorker?.(notifications.worker);
+ const api=express.Router(),protectedApi=express.Router(),identity=createIdentityModule(db,config,createAuthRateLimiter(redis)),projects=createProjectModule(db,identity.userRepository,config.PUBLIC_URL),taskModule=createTaskModule(db,projects.access),comments=createCommentModule(db,taskModule.service),attachments=createAttachmentModule(db,config,taskModule.service,projects.access),notifications=createNotificationModule(db,redis,projects.access),email=createEmailModule(db,config),ai=createAiModule(db,redis,config,projects.access,taskModule.service,comments.service);registerWorkers?.({notifications:notifications.worker,email:email.worker});
  api.use('/auth',identity.publicRoutes);protectedApi.use(identity.authentication,identity.profileRoutes);
  registerModules(protectedApi,[projects,taskModule,comments,attachments,notifications,ai]);
  api.use(protectedApi); app.use('/api/v1',api);

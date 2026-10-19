@@ -31,6 +31,7 @@ describe('project and membership workflows',()=>{
   expect((await request(app).post(`/api/v1/projects/${project.id}/invitations`).set(bearer(outsider.token)).send({email:'member@example.com'})).status).toBe(404);
   const invitation=await projectModule.service.invite(project.id,owner.id,' MEMBER@example.com ','member');
   const stored=await database.collection('invitations').findOne({id:invitation.invitation.id});expect(stored).not.toHaveProperty('token');expect(stored?.tokenHash).not.toBe(invitation.token);
+  const delivery=await database.collection('email_deliveries').findOne({invitationId:invitation.invitation.id});expect(delivery).toMatchObject({recipientEmailNormalized:'member@example.com',status:'pending',attempts:0});expect(delivery?.acceptUrl).toContain(invitation.token);
   const accepted=await request(app).post(`/api/v1/invitations/${invitation.token}/accept`).set(bearer(member.token));expect(accepted.status).toBe(200);
   expect((await request(app).post(`/api/v1/invitations/${invitation.token}/accept`).set(bearer(member.token))).status).toBe(200);
   expect((await request(app).patch(`/api/v1/projects/${project.id}`).set(bearer(member.token)).send({name:'Denied'})).status).toBe(404);
@@ -50,5 +51,16 @@ describe('project and membership workflows',()=>{
   expect((await request(app).post(`/api/v1/invitations/${rejectedInvitation.token}/reject`).set(bearer(outsider.token))).status).toBe(200);
   expect((await request(app).post(`/api/v1/invitations/${rejectedInvitation.token}/reject`).set(bearer(outsider.token))).status).toBe(200);
   expect((await request(app).post(`/api/v1/invitations/${rejectedInvitation.token}/accept`).set(bearer(outsider.token))).status).toBe(409);
+ });
+
+ it('rolls back invitation creation when its delivery intent cannot be persisted',async()=>{
+  const owner=await register('transaction-owner@example.com');
+  const project=await projectModule.service.create(owner.id,{name:'Atomic invitation',description:''});
+  const deliveries=database.collection('email_deliveries');
+  await deliveries.createIndex({recipientEmailNormalized:1},{unique:true,name:'test_unique_delivery_recipient'});
+  await deliveries.insertOne({id:randomUUID(),invitationId:randomUUID(),deliveryKind:'invitation',idempotencyKey:`test:${randomUUID()}`,recipientEmailNormalized:'collision@example.com',acceptUrl:'http://localhost/unused',status:'pending',attempts:0,availableAt:new Date(),createdAt:new Date()});
+  await expect(projectModule.service.invite(project.id,owner.id,'collision@example.com','member')).rejects.toMatchObject({status:409,code:'INVITATION_EXISTS'});
+  expect(await database.collection('invitations').countDocuments({projectId:project.id,emailNormalized:'collision@example.com'})).toBe(0);
+  await deliveries.dropIndex('test_unique_delivery_recipient');
  });
 });

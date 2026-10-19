@@ -84,7 +84,7 @@ This is the single public decision register. Each accepted record states the pro
 
 **Decision and rationale:** Define `AIProvider` and `MailerPort`, implement OpenRouter behind validated HTTP and Mailpit/SMTP locally, and keep provider/model configuration in validated environment settings. AI output is a suggestion requiring explicit user persistence.
 
-**Consequences:** Deterministic tests mock every provider outcome. Secrets and raw responses are redacted. Invitation persistence survives email failure and delivery retries through durable intent. AI endpoints enforce access, bounds, quota, timeout, and output validation.
+**Consequences:** Deterministic tests mock every provider outcome. Secrets and raw responses are redacted. Invitation persistence survives email failure and delivery retries through durable intent. The invitation URL is removed after success or terminal failure. SMTP delivery is at-least-once across a process crash; a stable message ID is supplied for provider-side deduplication. AI endpoints enforce access, bounds, quota, timeout, and output validation.
 
 ## Backend-neutral observability
 

@@ -2,7 +2,7 @@
 
 This design applies the persistence choices recorded in `DECISIONS.md` and the consistency boundaries defined by `HLD.md` and `LLD.md`.
 
-All IDs are UUIDv7 strings and timestamps are UTC dates. Collections are `users`, `sessions`, `projects`, `memberships`, `invitations`, `tasks`, `comments`, `attachments`, `notifications`, and `outbox_events`.
+All IDs are UUIDv7 strings and timestamps are UTC dates. Collections are `users`, `sessions`, `projects`, `memberships`, `invitations`, `tasks`, `comments`, `attachments`, `notifications`, `outbox_events`, `ai_usage`, and `email_deliveries`.
 
 Unique indexes enforce normalized user email, refresh token hash, invitation token hash, `(projectId,userId)` membership and notification delivery key. Task listing uses `(projectId,createdAt desc,id desc)` and a text index on title and description. Notification inboxes use `(recipientId,createdAt desc,id desc)`; workers claim `(status,availableAt,leaseUntil)`.
 
@@ -70,6 +70,12 @@ Application services verify referenced project/user existence. The last owner ca
 Fields: `id`, `projectId`, `emailNormalized`, `role` (`admin|member`), `tokenHash`, `status` (`pending|accepted|revoked|expired`), `expiresAt`, `createdBy`, `createdAt`, optional `acceptedAt`, `acceptedBy`, `revokedAt`.
 
 Indexes: unique `{tokenHash:1}`, `{projectId:1,emailNormalized:1,status:1}`, `{expiresAt:1}`, and `{projectId:1,createdAt:-1}`. Expiry is enforced during acceptance; maintenance may later mark expired rows. Tokens are random, single-use, and never logged.
+
+### `email_deliveries`
+
+Fields: `id`, `invitationId`, `deliveryKind` (`invitation`), `idempotencyKey`, `recipientEmailNormalized`, optional `acceptUrl`, `status` (`pending|processing|sent|failed`), `attempts`, `availableAt`, `createdAt`, optional `leaseUntil`, `sentAt`, and `lastErrorCode`.
+
+Indexes: unique `{id:1}`, unique `{invitationId:1,deliveryKind:1}`, and worker claim `{status:1,availableAt:1,leaseUntil:1,createdAt:1,id:1}`. Invitation and delivery intent are inserted in one transaction. The raw acceptance URL is retained only while delivery can still be attempted and is removed on success or terminal failure. Mail content and tokens are never logged.
 
 ### `tasks`
 
