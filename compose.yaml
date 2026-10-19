@@ -62,6 +62,14 @@ services:
     image: grafana/loki:latest
     profiles: ["observability"]
     ports: ["3100:3100"]
+  promtail:
+    image: grafana/promtail:latest
+    profiles: ["observability"]
+    command: ["-config.file=/etc/promtail/config.yaml"]
+    volumes:
+      - "./ops/promtail.yaml:/etc/promtail/config.yaml:ro"
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+    depends_on: [loki]
   tempo:
     image: grafana/tempo:latest
     profiles: ["observability"]
@@ -76,4 +84,5 @@ services:
   grafana:
     image: grafana/grafana:latest
     profiles: ["observability"]
+    volumes: ["./ops/grafana/datasources.yaml:/etc/grafana/provisioning/datasources/task-tracking.yaml:ro"]
     ports: ["3001:3000"]

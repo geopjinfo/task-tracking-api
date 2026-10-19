@@ -43,3 +43,7 @@ Pending outbox and email jobs remain in MongoDB during a rollback. Leases expire
 - Attachment failures: check bucket existence, credentials, clock skew, object metadata, and private-access policy.
 - Mail failures: check SMTP reachability and sender configuration; invitations remain valid while jobs retry.
 - AI failures: disable the key or provider route if needed; core task workflows continue without AI.
+
+## Optional observability profile
+
+The `observability` Compose profile adds an OTLP collector, Tempo trace storage, Promtail-to-Loki log shipping, Prometheus, and Grafana with provisioned data sources. Set `OTEL_ENABLED=true` and point `OTEL_EXPORTER_OTLP_ENDPOINT` at the collector to emit traces. Application logs continue to stdout and are shipped asynchronously; telemetry failure never becomes a request or worker dependency. Production deployments should pin image versions, authenticate Grafana, restrict telemetry ports, set retention, and use durable storage appropriate to their environment.

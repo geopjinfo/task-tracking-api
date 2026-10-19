@@ -30,6 +30,8 @@ docker compose --profile observability up --build
 
 It adds an OpenTelemetry collector, Tempo, Loki, Prometheus, and Grafana without making them application dependencies.
 
+Set `OTEL_ENABLED=true` before starting the profile to export application traces. Promtail ships container stdout logs asynchronously to Loki. Grafana at `http://localhost:3001` is preconfigured with Loki, Tempo, and Prometheus data sources. MongoDB remains the only source of truth for business state; loss of telemetry does not affect requests or delivery jobs.
+
 ## Environment
 
 | Variable | Purpose | Local default/template |
