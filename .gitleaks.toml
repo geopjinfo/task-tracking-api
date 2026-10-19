@@ -1,0 +1,13 @@
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Documented non-production JWT values used by local examples and tests"
+regexTarget = "secret"
+regexes = [
+  '''replace-with-at-least-32-characters''',
+  '''idor-integration-secret-at-least-32-characters''',
+  '''ai-integration-secret-at-least-32-characters''',
+  '''notifications-integration-secret-32-characters''',
+  '''collaboration-integration-secret-32-characters''',
+]
