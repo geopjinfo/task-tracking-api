@@ -8,6 +8,8 @@
 - HTTP tests run the Express application through Supertest and verify status codes, DTOs, cookies, validation, concealed resources, and stable error codes.
 - Integration tests run MongoDB as a replica set, Redis, MinIO, and Mailpit. They prove transactions, outbox leasing, Pub/Sub isolation, object verification, and invitation delivery.
 - End-to-end scenarios start from registration and cover project creation, invitation acceptance, task collaboration, attachment access, notification reconciliation, and logout.
+- Concurrency scenarios launch invitation acceptance and same-version task edits simultaneously, then assert unique membership, exactly one task winner, and one matching outbox event.
+- Migration tests prove database rejection of malformed core documents. Contract tests pair route parity with a strict attachment-discovery response schema.
 
 ## Required negative matrices
 

@@ -201,7 +201,7 @@ TransactionManager → TaskRepository.insert + OutboxRepository.insert(task.assi
 Controller → 201 task DTO
 ```
 
-Assignment requires owner/admin, validates current assignee membership, loads the expected version, mutates the domain entity, and transactionally updates task plus `task.assigned` or `task.reassigned`. Version mismatch returns 409. Self-notifications are removed during recipient calculation.
+Assignment requires owner/admin, validates current assignee membership, loads the expected version, mutates the domain entity, and transactionally updates task plus `task.assigned` or `task.reassigned`. General task edits similarly commit `task.updated`; other current members are notified while the actor is excluded. Version mismatch returns 409. Self-notifications are removed during recipient calculation.
 
 ### Status and deletion
 

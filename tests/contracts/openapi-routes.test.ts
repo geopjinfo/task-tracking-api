@@ -9,7 +9,8 @@ import { loadConfig } from '../../src/config/index.js';
 import { Database } from '../../src/platform/database/mongo.database.js';
 import { createRedisClient } from '../../src/platform/redis/redis.client.js';
 
-const documentSchema=z.object({paths:z.record(z.string(),z.record(z.string(),z.unknown()))});
+const attachmentSchema=z.object({type:z.literal('object'),additionalProperties:z.literal(false),required:z.array(z.string()),properties:z.record(z.string(),z.unknown())});
+const documentSchema=z.object({components:z.object({schemas:z.object({AttachmentSummary:attachmentSchema,AttachmentPage:attachmentSchema})}),paths:z.record(z.string(),z.record(z.string(),z.unknown()))});
 const errorSchema=z.object({error:z.object({code:z.string()})});
 const methods=['get','post','patch','delete'] as const;
 const config=loadConfig({NODE_ENV:'test',LOG_LEVEL:'silent',PUBLIC_URL:'http://localhost:3000',MONGODB_URI:`mongodb://localhost:27017/contracts_test_${randomUUID().replaceAll('-','')}?replicaSet=rs0&directConnection=true`,REDIS_URL:'redis://localhost:6379/8',JWT_SECRET:'contract-test-secret-at-least-32-characters',S3_ENDPOINT:'http://localhost:9000',S3_BUCKET:'task-attachments',S3_ACCESS_KEY:'key',S3_SECRET_KEY:'secret'});
@@ -36,4 +37,5 @@ describe('OpenAPI route parity',()=>{
    expect(parsed.success?parsed.data.error.code:undefined,`${method.toUpperCase()} ${template}`).not.toBe('ROUTE_NOT_FOUND');
   }
  });
+ it('defines a strict response contract for attachment discovery',async()=>{const raw:unknown=parse(await readFile(new URL('../../docs/openapi.yaml',import.meta.url),'utf8')),document=documentSchema.parse(raw),summary=document.components.schemas.AttachmentSummary,page=document.components.schemas.AttachmentPage;expect(summary.required).toEqual(expect.arrayContaining(['id','taskId','uploaderId','fileName','mimeType','sizeBytes','createdAt']));expect(Object.keys(summary.properties)).not.toContain('objectKey');expect(page.required).toContain('items');expect(document.paths['/tasks/{taskId}/attachments']).toHaveProperty('get.responses.200.content.application/json.schema.$ref','#/components/schemas/AttachmentPage');});
 });

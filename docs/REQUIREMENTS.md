@@ -28,6 +28,7 @@ The release is a backend API for collaborative task tracking. The mandatory gate
 | FILE-01 | Member can request a bounded private upload intent | `POST /tasks/{id}/attachments/upload-intents` | Authorization, size/type bounds, signed URL test |
 | FILE-02 | Upload confirmation verifies the object before readiness | `POST /tasks/{id}/attachments/complete` | Missing/object-mismatch and success tests |
 | FILE-03 | Current members receive short-lived authorized download URLs | `GET /attachments/{id}/download` | Removed/non-member denial and expiry contract |
+| FILE-05 | Current members can discover ready task attachments without storage metadata | `GET /tasks/{id}/attachments` | Pagination, concealment, and strict response-shape tests |
 | NOTIF-01 | Business mutations persist an outbox intent atomically | Internal transaction | Mongo rollback and event-shape tests |
 | NOTIF-02 | Worker leases, retries, and deduplicates delivery | Worker | Crash/restart, expired lease, retry, and duplicate event tests |
 | NOTIF-03 | User can reconcile and update a durable notification inbox | Notification REST endpoints | Recipient isolation, pagination, unread/read-all tests |

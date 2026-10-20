@@ -38,6 +38,18 @@ This is the single public decision register. Each accepted record states the pro
 
 **Consequences:** Modified applied migrations fail fast rather than drifting silently. Failed migrations are not recorded, concurrent runners are rejected, and operational rollback remains a deliberate action rather than an automatic startup behavior.
 
+### Validator hardening after the initial release
+
+**Decision and rationale:** Preserve the checksum of migration 1 and add migration 2 for BSON types, bounds, identifier patterns, and state enums. This keeps already-applied environments valid while moving malformed-document rejection into MongoDB. Comment tombstones deliberately permit an empty stored body because the application renders them as `[deleted]`.
+
+**Consequences:** Direct database writes receive the same core shape protection as application writes. The migration remains reversible to the original required-field validators.
+
+### Attachment discovery and task edit notifications
+
+**Decision and rationale:** Add a member-authorized, cursor-paginated attachment list that returns ready metadata only and excludes storage keys. Emit `task.updated` in the same transaction as general task edits, notifying other current project members but not the actor.
+
+**Consequences:** Clients can discover collaborative files without guessing identifiers, and ordinary edits participate in the existing durable outbox model without a new delivery subsystem.
+
 ## Short access tokens and rotating refresh sessions
 
 **Status:** Accepted

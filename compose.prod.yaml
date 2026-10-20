@@ -35,6 +35,16 @@ services:
     ports: !reset []
   mailpit:
     ports: !reset []
+  otel-collector:
+    ports: !reset []
+  loki:
+    ports: !reset []
+  tempo:
+    ports: !reset []
+  prometheus:
+    ports: !reset []
+  grafana:
+    ports: !reset []
 
 volumes:
   caddy_data:

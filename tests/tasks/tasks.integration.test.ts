@@ -48,4 +48,12 @@ describe('task workflows',()=>{
   const assignedToMember=await request(app).get('/api/v1/tasks/assigned-to-me').set(bearer(member.token));expect(assignedToMember.status,JSON.stringify(assignedToMember.body)).toBe(200);expect(items(assignedToMember.body).some(task=>task.title==='Hidden assignment')).toBe(false);
   const deletable=created[3];if(!deletable)throw new Error('task setup failed');expect((await request(app).delete(`/api/v1/tasks/${deletable.id}`).set(bearer(member.token))).status).toBe(404);expect((await request(app).delete(`/api/v1/tasks/${deletable.id}`).set(bearer(owner.token))).status).toBe(204);
  });
+ it('allows exactly one concurrent update for the same version',async()=>{
+  const owner=await register('task-race-owner@example.com'),project=await projects.service.create(owner.id,{name:'Task race',description:''});
+  const created=taskSchema.parse((await request(app).post(`/api/v1/projects/${project.id}/tasks`).set(bearer(owner.token)).send({title:'Race'})).body);
+  const results=await Promise.all([request(app).patch(`/api/v1/tasks/${created.id}`).set(bearer(owner.token)).send({title:'Winner A',version:1}),request(app).patch(`/api/v1/tasks/${created.id}`).set(bearer(owner.token)).send({title:'Winner B',version:1})]);
+  expect(results.map(result=>result.status).sort()).toEqual([200,409]);
+  expect(await database.collection('tasks').findOne({id:created.id})).toMatchObject({version:2});
+  expect(await database.collection('outbox_events').countDocuments({'event.type':'task.updated','event.taskId':created.id})).toBe(1);
+ });
 });

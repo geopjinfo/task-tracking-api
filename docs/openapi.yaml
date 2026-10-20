@@ -9,6 +9,8 @@ components:
     Project: { type: object, required: [id, name, ownerId, createdAt, updatedAt], properties: { id: { type: string, format: uuid }, name: { type: string }, description: { type: string }, ownerId: { type: string, format: uuid }, createdAt: { type: string, format: date-time }, updatedAt: { type: string, format: date-time } } }
     Membership: { type: object, required: [id, projectId, userId, role], properties: { id: { type: string, format: uuid }, projectId: { type: string, format: uuid }, userId: { type: string, format: uuid }, role: { enum: [owner, admin, member] } } }
     Comment: { type: object, required: [id, taskId, authorId, body, createdAt], properties: { id: { type: string, format: uuid }, taskId: { type: string, format: uuid }, authorId: { type: string, format: uuid }, body: { type: string }, createdAt: { type: string, format: date-time } } }
+    AttachmentSummary: { type: object, additionalProperties: false, required: [id, taskId, uploaderId, fileName, mimeType, sizeBytes, createdAt], properties: { id: { type: string, format: uuid }, taskId: { type: string, format: uuid }, uploaderId: { type: string, format: uuid }, fileName: { type: string }, mimeType: { type: string }, sizeBytes: { type: integer, minimum: 1 }, createdAt: { type: string, format: date-time }, completedAt: { type: string, format: date-time } } }
+    AttachmentPage: { type: object, additionalProperties: false, required: [items], properties: { items: { type: array, items: { $ref: '#/components/schemas/AttachmentSummary' } }, nextCursor: { type: string } } }
     Notification: { type: object, required: [id, recipientId, projectId, type, title, body, createdAt], properties: { id: { type: string, format: uuid }, recipientId: { type: string, format: uuid }, projectId: { type: string, format: uuid }, taskId: { type: string, format: uuid }, type: { type: string }, title: { type: string }, body: { type: string }, readAt: { type: string, format: date-time }, createdAt: { type: string, format: date-time } } }
   parameters:
     ProjectId: { in: path, name: projectId, required: true, schema: { type: string, format: uuid } }
@@ -110,6 +112,12 @@ paths:
       security: [{ bearerAuth: [] }]
       requestBody: { required: true, content: { application/json: { schema: { type: object, additionalProperties: false, required: [fileName, contentType, size], properties: { fileName: { type: string, minLength: 1, maxLength: 255 }, contentType: { type: string, minLength: 3, maxLength: 120 }, size: { type: integer, minimum: 1, maximum: 10000000 } } } } } }
       responses: { '201': { description: Private signed upload intent }, '422': { $ref: '#/components/responses/ValidationError' }, '503': { description: Storage unavailable } }
+  /tasks/{taskId}/attachments:
+    parameters: [{ $ref: '#/components/parameters/TaskId' }]
+    get:
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/Limit' }, { $ref: '#/components/parameters/Cursor' }]
+      responses: { '200': { description: Ready attachment metadata page, content: { application/json: { schema: { $ref: '#/components/schemas/AttachmentPage' } } } }, '404': { $ref: '#/components/responses/NotFound' } }
   /tasks/{taskId}/attachments/complete:
     parameters: [{ $ref: '#/components/parameters/TaskId' }]
     post:

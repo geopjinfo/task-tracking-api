@@ -2,6 +2,7 @@ import { z } from 'zod';
 export const notificationEventSchema=z.discriminatedUnion('type',[
  z.object({type:z.literal('task.assigned'),taskId:z.uuid(),projectId:z.uuid(),actorId:z.uuid(),assigneeId:z.uuid(),title:z.string().max(200)}),
  z.object({type:z.literal('task.reassigned'),taskId:z.uuid(),projectId:z.uuid(),actorId:z.uuid(),assigneeId:z.uuid(),title:z.string().max(200)}),
+ z.object({type:z.literal('task.updated'),taskId:z.uuid(),projectId:z.uuid(),actorId:z.uuid(),title:z.string().max(200)}),
  z.object({type:z.literal('task.completed'),taskId:z.uuid(),projectId:z.uuid(),actorId:z.uuid(),title:z.string().max(200)}),
  z.object({type:z.literal('task.commented'),taskId:z.uuid(),projectId:z.uuid(),actorId:z.uuid(),commentId:z.uuid(),title:z.string().max(200)})
 ]);

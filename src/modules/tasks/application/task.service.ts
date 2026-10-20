@@ -38,7 +38,8 @@ export class TaskService {
   async update(id: string, actorId: string, expectedVersion: number, changes: { title?: string; description?: string; dueDate?: Date|null }): Promise<Task> {
     const task = await this.get(id, actorId);
     task.update(changes);
-    await this.persist(task, expectedVersion);
+    const snapshot=task.snapshot();
+    await this.persist(task,expectedVersion,{type:'task.updated',taskId:snapshot.id,projectId:snapshot.projectId,actorId,title:snapshot.title});
     return task;
   }
 

@@ -63,6 +63,7 @@ Errors never contain stack traces, database messages, provider bodies, credentia
 | POST/GET | `/tasks/{taskId}/comments` | COMM-01 | member |
 | PATCH/DELETE | `/comments/{commentId}` | COMM-02 | current member and comment author |
 | POST | `/tasks/{taskId}/attachments/upload-intents` | FILE-01 | member |
+| GET | `/tasks/{taskId}/attachments` | FILE-05 | current member |
 | POST | `/tasks/{taskId}/attachments/complete` | FILE-02 | member |
 | GET | `/attachments/{attachmentId}/download` | FILE-03 | current member |
 | DELETE | `/attachments/{attachmentId}` | FILE-04 | uploader or project owner/admin |
@@ -76,7 +77,7 @@ Errors never contain stack traces, database messages, provider bodies, credentia
 
 Invitation email is an asynchronous consequence of invitation creation, not a separate public endpoint.
 
-Comment lists use chronological `(createdAt,id)` cursors. Deletion retains a tombstone and returns `[deleted]` in subsequent lists; deleted comments cannot be edited. Attachment confirmation compares actual object length and content type with the upload intent. Metadata mismatch fails the attachment and deletes the object. Deletion hides metadata before removing the private object, and stale pending intents are failed and cleaned idempotently.
+Comment lists use chronological `(createdAt,id)` cursors. Deletion retains a tombstone and returns `[deleted]` in subsequent lists; deleted comments cannot be edited. Attachment confirmation compares actual object length and content type with the upload intent. Metadata mismatch fails the attachment and deletes the object. The paginated task attachment list returns ready metadata only and never exposes storage keys. Deletion hides metadata before removing the private object, and stale pending intents are failed and cleaned idempotently.
 
 ## Filtering and sorting
 

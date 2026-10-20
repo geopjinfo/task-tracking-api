@@ -63,4 +63,12 @@ describe('project and membership workflows',()=>{
   expect(await database.collection('invitations').countDocuments({projectId:project.id,emailNormalized:'collision@example.com'})).toBe(0);
   await deliveries.dropIndex('test_unique_delivery_recipient');
  });
+ it('keeps concurrent invitation acceptance idempotent',async()=>{
+  const owner=await register('race-owner@example.com'),member=await register('race-member@example.com');
+  const project=await projectModule.service.create(owner.id,{name:'Invitation race',description:''}),invitation=await projectModule.service.invite(project.id,owner.id,'race-member@example.com','member');
+  const results=await Promise.all([request(app).post(`/api/v1/invitations/${invitation.token}/accept`).set(bearer(member.token)),request(app).post(`/api/v1/invitations/${invitation.token}/accept`).set(bearer(member.token))]);
+  expect(results.map(result=>result.status).every(status=>status===200||status===503)).toBe(true);
+  expect(await database.collection('memberships').countDocuments({projectId:project.id,userId:member.id})).toBe(1);
+  expect(await database.collection('invitations').findOne({id:invitation.invitation.id})).toMatchObject({status:'accepted'});
+ });
 });
