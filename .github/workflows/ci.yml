@@ -14,7 +14,7 @@ jobs:
       - name: Create CI network
         run: docker network create task-tracking-ci
       - name: Start MongoDB
-        run: docker run -d --name task-ci-mongo --network task-tracking-ci -p 27017:27017 mongo:8 mongod --replSet rs0 --bind_ip_all
+        run: docker run -d --name task-ci-mongo --network task-tracking-ci -p 27017:27017 mongo:8.0.30-noble mongod --replSet rs0 --bind_ip_all
       - name: Start Redis
         run: docker run -d --name task-ci-redis --network task-tracking-ci -p 6379:6379 redis:8-alpine
       - name: Start MinIO
